@@ -1,17 +1,24 @@
 <script setup lang="ts">
 import {Vue3Lottie} from "vue3-lottie";
 import mapLoad from '@/assets/loading-states/map-load.json';
-import { markRaw, onMounted, onUnmounted, ref, shallowRef } from 'vue';
-import {Map, type LngLatLike} from "maplibre-gl";
+import { markRaw, onMounted, ref, shallowRef } from 'vue';
+import MapSidebar from "./MapSidebar.vue";
+import {Map} from "maplibre-gl";
+import { useMapStore } from "../stores/map.store";
+import { useMapAreasStore } from "../stores/mapAreas.store";
+import type { AreaData } from "../interfaces";
+import municipitiesData from '@/data/municities_data.json'
+import barangaysData from '@/data/barangays_data.json'
 const mapContainer = shallowRef<HTMLDivElement | null>(null);
-const map = shallowRef<null | Map>(null);
-const lnglat: LngLatLike = [125.1275, 8.1569]; // Malaybalay City center
+
+ // Malaybalay City center
 const loading = ref(false);
 const bounds: [number, number, number, number] = [
   124.2, 7.3,   // Southwest corner of Bukidnon
   125.8, 8.8    // Northeast corner of Bukidnon
 ];
-
+const { map, lnglat} = useMapStore();
+const {setupAreas} = useMapAreasStore();
 const initMap = () => {
   if (mapContainer.value) {
     map.value = markRaw(
@@ -31,12 +38,18 @@ const initMap = () => {
 onMounted(() => {
     loading.value = true;
     initMap();
+    // @ts-ignore
+    map.value?.on('style.load', async () => {
+        setupAreas(municipitiesData as AreaData[]);
+        setupAreas(barangaysData as AreaData[]);
+    });
     loading.value = false;
 });
 
 </script>
 
 <template>
+    <MapSidebar/>
     <div class="map-wrap">
     <div v-if="loading" class="h-96 overflow-hidden d-flex justify-center align-center">
       <Vue3Lottie

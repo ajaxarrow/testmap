@@ -1,5 +1,9 @@
 const mapRoutes = [
     {
+        path: '/',
+        redirect: '/map'
+    },
+    {
         path: '/map',
         name: 'MapView',
         //@ts-ignore
