@@ -1,0 +1,20 @@
+*{
+    font-family: 'Satoshi', sans-serif !important;
+    scroll-behavior: smooth !important;
+}
+
+body{
+    scroll-behavior: smooth;
+    /*background-color: #F0F5F9 !important;*/
+}
+
+.bg-main{
+    background-color: #F0F5F9 !important;
+}
+
+.center{
+    display: grid;
+    place-items: center;
+    height: 100vh;
+    width: 100vw;
+}
