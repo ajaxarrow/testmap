@@ -5,6 +5,7 @@ import {
   PhFileText,
   PhPlusCircle,
   PhHouse,
+  PhGear,
 } from "@phosphor-icons/vue";
 
 import { ref, computed, defineComponent, markRaw } from 'vue';
@@ -12,10 +13,12 @@ import MapAreasHeader from "./Areas/MapAreasHeader.vue";
 import MapLayersHeader from "./Layers/MapLayersHeader.vue";
 import MapMonitoringHeader from "./Monitoring/MapMonitoringHeader.vue";
 import MapReportsHeader from "./Reports/MapReportsHeader.vue";
+import MapConfigHeader from "./Config/MapConfigHeader.vue";
 import MapAreasMainContent from "./Areas/MapAreasMainContent.vue";
 import MapLayersMainContent from "./Layers/MapLayersMainContent.vue";
 import MapMonitoringMainContent from "./Monitoring/MapMonitoringMainContent.vue";
 import MapReportsMainContent from "./Reports/MapReportsMainContent.vue";
+import MapConfigMainContent from "./Config/MapConfigMainContent.vue";
 
 type CustomComponent = ReturnType<typeof defineComponent>;
 
@@ -57,6 +60,12 @@ const navLinks = [
     icon: markRaw(PhFileText),
     header: markRaw(MapReportsHeader),
     mainContent: markRaw(MapReportsMainContent)
+  },
+  {
+    name: 'Config',
+    icon: markRaw(PhGear),
+    header: markRaw(MapConfigHeader),
+    mainContent: markRaw(MapConfigMainContent)
   },
 ];
 

@@ -6,6 +6,7 @@ import MapSidebar from "./MapSidebar.vue";
 import {Map} from "maplibre-gl";
 import { useMapStore } from "../stores/map.store";
 import { useMapAreasStore } from "../stores/mapAreas.store";
+import { useMapStyleStore } from "../stores/mapStyle.store";
 import type { AreaData } from "../interfaces";
 import municipitiesData from '@/data/municities_data.json'
 import barangaysData from '@/data/barangays_data.json'
@@ -19,17 +20,24 @@ const bounds: [number, number, number, number] = [
 ];
 const { map, lnglat} = useMapStore();
 const {setupAreas} = useMapAreasStore();
+const { getStyleUrl, initializeMapStyle } = useMapStyleStore();
+
 const initMap = () => {
   if (mapContainer.value) {
+    // Initialize map style store first (sets satellite as default)
+    initializeMapStyle();
+    
     map.value = markRaw(
         new Map({
           container: mapContainer.value,
-          style: `https://api.maptiler.com/maps/topo-v2/style.json?key=slSuwEtNY8loqQWUZ9IO`,
+          style: getStyleUrl('satellite'), // Use satellite as default
           center: lnglat,
           zoom: 7.5,
           maxBounds: bounds
         })
     );
+    
+    console.log('🗺️ Map initialized with satellite style as default');
   } else {
     console.error("Map container not found.");
   }

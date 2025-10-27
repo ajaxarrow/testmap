@@ -74,55 +74,55 @@ export const useMapAreasStore = createGlobalState(() => {
       },
     });
 
-    if (!layersWithClickListeners.has(layerId) && area.type == 'Barangay') {
-      // @ts-ignore
-      map.value?.on('mouseover', `id-${area.id}`, (e) => {
-        if (area.id !== selectedArea.value?.id) {
-          map.value?.setPaintProperty(`id-${area.id}`, 'fill-opacity', .5);
-          map.value?.setPaintProperty(`id-${area.id}`, 'fill-color', area.type == 'Barangay' ? getColorArea(area.type) : 'transparent');
-        }
+    // if (!layersWithClickListeners.has(layerId) && area.type == 'Barangay') {
+    //   // @ts-ignore
+    //   map.value?.on('mouseover', `id-${area.id}`, (e) => {
+    //     if (area.id !== selectedArea.value?.id) {
+    //       map.value?.setPaintProperty(`id-${area.id}`, 'fill-opacity', .5);
+    //       map.value?.setPaintProperty(`id-${area.id}`, 'fill-color', area.type == 'Barangay' ? getColorArea(area.type) : 'transparent');
+    //     }
 
-        const popupContent = `<h4>${area.name}</h4>
-                              <p>${area.type}</p>`
-        popup.value?.setHTML(popupContent);
-        // @ts-ignore
-        popup.value?.setLngLat([e.lngLat.lng, e.lngLat.lat]);
-        // @ts-ignore
-        popup.value?.addTo(map.value);
-      });
+    //     const popupContent = `<h4>${area.name}</h4>
+    //                           <p>${area.type}</p>`
+    //     popup.value?.setHTML(popupContent);
+    //     // @ts-ignore
+    //     popup.value?.setLngLat([e.lngLat.lng, e.lngLat.lat]);
+    //     // @ts-ignore
+    //     popup.value?.addTo(map.value);
+    //   });
 
-      // @ts-ignore
-      map.value?.on('mouseleave', `id-${area.id}`, () => {
-        if (area.id !== selectedArea.value?.id) {
-          map.value?.setPaintProperty(`id-${area.id}`, 'fill-opacity', 0);
-        }
-        popup.value?.remove();
-      });
+    //   // @ts-ignore
+    //   map.value?.on('mouseleave', `id-${area.id}`, () => {
+    //     if (area.id !== selectedArea.value?.id) {
+    //       map.value?.setPaintProperty(`id-${area.id}`, 'fill-opacity', 0);
+    //     }
+    //     popup.value?.remove();
+    //   });
 
 
-      // @ts-ignore
-      map.value?.on('click', `id-${area.id}`, (e) => {
-        // @ts-ignore
-        if (map.value?.getZoom() < 6.25){
-          // @ts-ignore
-          map.value?.easeTo({
-            zoom: 6,
-            center: [e.lngLat.lng, e.lngLat.lat],
-            duration: 1000
-          });
-        }
-        else{
-          // @ts-ignore
-          map.value?.easeTo({
-            zoom: 8,
-            center: [e.lngLat.lng, e.lngLat.lat],
-            duration: 1000
-          });
-        }
-        clickArea(area)
-      });
-      layersWithClickListeners.add(layerId);
-    }
+    //   // @ts-ignore
+    //   map.value?.on('click', `id-${area.id}`, (e) => {
+    //     // @ts-ignore
+    //     if (map.value?.getZoom() < 6.25){
+    //       // @ts-ignore
+    //       map.value?.easeTo({
+    //         zoom: 6,
+    //         center: [e.lngLat.lng, e.lngLat.lat],
+    //         duration: 1000
+    //       });
+    //     }
+    //     else{
+    //       // @ts-ignore
+    //       map.value?.easeTo({
+    //         zoom: 8,
+    //         center: [e.lngLat.lng, e.lngLat.lat],
+    //         duration: 1000
+    //       });
+    //     }
+    //     clickArea(area)
+    //   });
+    //   layersWithClickListeners.add(layerId);
+    // }
 
   });
 }
