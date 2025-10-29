@@ -48,8 +48,8 @@ onMounted(() => {
     initMap();
     // @ts-ignore
     map.value?.on('style.load', async () => {
-        setupAreas(municipitiesData as AreaData[]);
-        setupAreas(barangaysData as AreaData[]);
+        // setupAreas(municipitiesData as AreaData[]);
+        // setupAreas(barangaysData as AreaData[]);
     });
     loading.value = false;
 });

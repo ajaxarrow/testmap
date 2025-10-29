@@ -36,10 +36,46 @@ export const useMapAreasStore = createGlobalState(() => {
     if (area.id != selectedArea.value?.id) {
 
         if (selectedArea.value){
-            map.value?.setPaintProperty(`id-${selectedArea.value.id}`, 'fill-color', 'transparent');
+            // map.value?.setPaintProperty(`id-${selectedArea.value.id}`, 'fill-color', 'transparent');
+            const layerId = `id-${selectedArea.value.id}`;
+
+            console.log(layerId)
+
+            if (map.value?.getLayer(layerId)) {
+            // Remove event listeners first
+            // @ts-ignore
+            map.value?.off('mouseover', layerId);
+            // @ts-ignore
+            map.value?.off('mouseleave', layerId);
+            // @ts-ignore
+            map.value?.off('click', layerId);
+
+            // Remove the layer and source from the map
+            map.value?.removeLayer(layerId);
+            map.value?.removeSource(selectedArea.value.id);
+            // layersWithClickListeners.delete(layerId);
+            }
         }
 
         setSelectedArea(area);
+
+        const layerId = `id-${area.id}`;
+        // @ts-ignore
+        map.value?.addSource(area.id, {
+        type: 'geojson',
+        data: area.geojson,
+        });
+
+        map.value?.addLayer({
+        id: `id-${area.id}`,
+        type: 'fill',
+        source: area.id,
+        layout: {},
+        paint: {
+            'fill-opacity': 0,
+            'fill-color': 'transparent',
+        },
+        });
         
         map.value?.fitBounds(
         // @ts-ignore
