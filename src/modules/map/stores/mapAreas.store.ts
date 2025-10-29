@@ -68,12 +68,13 @@ export const useMapAreasStore = createGlobalState(() => {
 
         map.value?.addLayer({
         id: `id-${area.id}`,
-        type: 'fill',
+        type: 'line',
         source: area.id,
         layout: {},
         paint: {
-            'fill-opacity': 0,
-            'fill-color': 'transparent',
+            'line-opacity': 0,
+            'line-color': 'transparent',
+            'line-width': 2,
         },
         });
         
@@ -83,8 +84,9 @@ export const useMapAreasStore = createGlobalState(() => {
         {padding: 30, duration: 2000}
         )
 
-        map.value?.setPaintProperty(`id-${area.id}`, 'fill-opacity', .5);
-        map.value?.setPaintProperty(`id-${area.id}`, 'fill-color', getColorArea(area.type));
+        map.value?.setPaintProperty(`id-${area.id}`, 'line-opacity', .8);
+        map.value?.setPaintProperty(`id-${area.id}`, 'line-color', getColorArea(area.type));
+        map.value?.setPaintProperty(`id-${area.id}`, 'line-width', 2);
     } else {
         resetToDefault();
     }
@@ -101,12 +103,13 @@ export const useMapAreasStore = createGlobalState(() => {
 
     map.value?.addLayer({
       id: `id-${area.id}`,
-      type: 'fill',
+      type: 'line',
       source: area.id,
       layout: {},
       paint: {
-        'fill-opacity': 0,
-        'fill-color': 'transparent',
+        'line-opacity': 0,
+        'line-color': 'transparent',
+        'line-width': 2,
       },
     });
 

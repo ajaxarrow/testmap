@@ -29,13 +29,115 @@ interface FloodAnalysisResult {
   }
 }
 
+interface ForestAnalysisResult {
+  success: boolean
+  area: string
+  dateRange: string
+  forestData: {
+    type: 'FeatureCollection'
+    features: Array<{
+      type: 'Feature'
+      geometry: any
+      properties: any
+    }>
+  }
+  metadata: {
+    sensor: string
+    index: string
+    scale: string
+    analysisDate: string
+    note?: string
+    imageCount?: number
+  }
+}
+
+interface BuiltUpAnalysisResult {
+  success: boolean
+  area: string
+  dateRange: string
+  builtUpData: {
+    type: 'FeatureCollection'
+    features: Array<{
+      type: 'Feature'
+      geometry: any
+      properties: any
+    }>
+  }
+  metadata: {
+    sensor: string
+    index: string
+    scale: string
+    analysisDate: string
+    note?: string
+    imageCount?: number
+  }
+}
+
+interface WaterAnalysisResult {
+  success: boolean
+  area: string
+  dateRange: string
+  waterData: {
+    type: 'FeatureCollection'
+    features: Array<{
+      type: 'Feature'
+      geometry: any
+      properties: any
+    }>
+  }
+  metadata: {
+    sensor: string
+    index: string
+    scale: string
+    analysisDate: string
+    note?: string
+    imageCount?: number
+  }
+}
+
+interface DumpsiteAnalysisResult {
+  success: boolean
+  area: string
+  dateRange: string
+  dumpsiteData: {
+    type: 'FeatureCollection'
+    features: Array<{
+      type: 'Feature'
+      geometry: any
+      properties: any
+    }>
+  }
+  metadata: {
+    sensor: string
+    method: string
+    scale: string
+    analysisDate: string
+    note?: string
+    preImages?: number
+    postImages?: number
+  }
+}
+
 export const useSatelliteFloodStore = createGlobalState(() => {
   const { map } = useMapStore()
   
   // State
   const isAnalyzing = ref(false)
+  const isAnalyzingFlood = ref(false)
+  const isAnalyzingForest = ref(false)
+  const isAnalyzingBuiltUp = ref(false)
+  const isAnalyzingWater = ref(false)
+  const isAnalyzingDumpsite = ref(false)
   const floodResults = ref<FloodAnalysisResult | null>(null)
+  const forestResults = ref<ForestAnalysisResult | null>(null)
+  const builtUpResults = ref<BuiltUpAnalysisResult | null>(null)
+  const waterResults = ref<WaterAnalysisResult | null>(null)
+  const dumpsiteResults = ref<DumpsiteAnalysisResult | null>(null)
   const floodLayerVisible = ref(false)
+  const forestLayerVisible = ref(false)
+  const builtUpLayerVisible = ref(false)
+  const waterLayerVisible = ref(false)
+  const dumpsiteLayerVisible = ref(false)
   const currentAnalysisArea = ref<AreaData | null>(null)
   
   // Layer IDs
@@ -44,6 +146,194 @@ export const useSatelliteFloodStore = createGlobalState(() => {
 
   // API Configuration
   const API_BASE_URL = 'http://localhost:4000'
+
+  /**
+   * Run forest analysis using the backend API
+   */
+  const runForestAnalysis = async (area: AreaData, startDate: string, endDate: string) => {
+    if (!map.value) {
+      throw new Error('Map not initialized')
+    }
+
+    console.log(`🌲 Starting forest analysis for ${area.name}`)
+    isAnalyzingForest.value = true
+    
+    try {
+      const payload = {
+        geometry: area.geojson.geometry,
+        startDate,
+        endDate,
+        areaName: area.name
+      }
+
+      const response = await fetch(`${API_BASE_URL}/analyze-forest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const result: ForestAnalysisResult = await response.json()
+      forestResults.value = result
+      currentAnalysisArea.value = area
+
+      if (result.forestData.features.length > 0) {
+        await addForestLayerToMap(result.forestData)
+      }
+      
+      console.log('✅ Forest analysis completed')
+    } catch (error: any) {
+      console.error('❌ Forest analysis failed:', error)
+      throw new Error(`Forest analysis failed: ${error.message}`)
+    } finally {
+      isAnalyzingForest.value = false
+    }
+  }
+
+  /**
+   * Run built-up area analysis using the backend API
+   */
+  const runBuiltUpAnalysis = async (area: AreaData, startDate: string, endDate: string) => {
+    if (!map.value) {
+      throw new Error('Map not initialized')
+    }
+
+    console.log(`🏗 Starting built-up analysis for ${area.name}`)
+    isAnalyzingBuiltUp.value = true
+    
+    try {
+      const payload = {
+        geometry: area.geojson.geometry,
+        startDate,
+        endDate,
+        areaName: area.name
+      }
+
+      const response = await fetch(`${API_BASE_URL}/analyze-builtup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const result: BuiltUpAnalysisResult = await response.json()
+      builtUpResults.value = result
+      currentAnalysisArea.value = area
+
+      if (result.builtUpData.features.length > 0) {
+        await addBuiltUpLayerToMap(result.builtUpData)
+      }
+      
+      console.log('✅ Built-up analysis completed')
+    } catch (error: any) {
+      console.error('❌ Built-up analysis failed:', error)
+      throw new Error(`Built-up analysis failed: ${error.message}`)
+    } finally {
+      isAnalyzingBuiltUp.value = false
+    }
+  }
+
+  /**
+   * Run water bodies analysis using the backend API
+   */
+  const runWaterAnalysis = async (area: AreaData, startDate: string, endDate: string) => {
+    if (!map.value) {
+      throw new Error('Map not initialized')
+    }
+
+    console.log(`💧 Starting water analysis for ${area.name}`)
+    isAnalyzingWater.value = true
+    
+    try {
+      const payload = {
+        geometry: area.geojson.geometry,
+        startDate,
+        endDate,
+        areaName: area.name
+      }
+
+      const response = await fetch(`${API_BASE_URL}/analyze-water`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const result: WaterAnalysisResult = await response.json()
+      waterResults.value = result
+      currentAnalysisArea.value = area
+
+      if (result.waterData.features.length > 0) {
+        await addWaterLayerToMap(result.waterData)
+      }
+      
+      console.log('✅ Water analysis completed')
+    } catch (error: any) {
+      console.error('❌ Water analysis failed:', error)
+      throw new Error(`Water analysis failed: ${error.message}`)
+    } finally {
+      isAnalyzingWater.value = false
+    }
+  }
+
+  /**
+   * Run dumpsite detection using the backend API
+   */
+  const runDumpsiteAnalysis = async (area: AreaData, startDate: string, endDate: string) => {
+    if (!map.value) {
+      throw new Error('Map not initialized')
+    }
+
+    console.log(`🗑 Starting dumpsite analysis for ${area.name}`)
+    isAnalyzingDumpsite.value = true
+    
+    try {
+      const payload = {
+        geometry: area.geojson.geometry,
+        startDate,
+        endDate,
+        areaName: area.name
+      }
+
+      const response = await fetch(`${API_BASE_URL}/analyze-dumpsites`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const result: DumpsiteAnalysisResult = await response.json()
+      dumpsiteResults.value = result
+      currentAnalysisArea.value = area
+
+      if (result.dumpsiteData.features.length > 0) {
+        await addDumpsiteLayerToMap(result.dumpsiteData)
+      }
+      
+      console.log('✅ Dumpsite analysis completed')
+    } catch (error: any) {
+      console.error('❌ Dumpsite analysis failed:', error)
+      throw new Error(`Dumpsite analysis failed: ${error.message}`)
+    } finally {
+      isAnalyzingDumpsite.value = false
+    }
+  }
 
   /**
    * Run satellite flood analysis using the backend API
@@ -55,7 +345,7 @@ export const useSatelliteFloodStore = createGlobalState(() => {
 
     console.log(`🛰️ Starting satellite flood analysis for ${area.name}`)
     
-    isAnalyzing.value = true
+    isAnalyzingFlood.value = true
     
     try {
       // Clear previous results
@@ -120,7 +410,7 @@ export const useSatelliteFloodStore = createGlobalState(() => {
         throw new Error(`Flood analysis failed: ${error.message}`)
       }
     } finally {
-      isAnalyzing.value = false
+      isAnalyzingFlood.value = false
     }
   }
 
@@ -208,6 +498,234 @@ export const useSatelliteFloodStore = createGlobalState(() => {
   }
 
   /**
+   * Add forest data as a layer to the map
+   */
+  const addForestLayerToMap = async (forestData: any) => {
+    if (!map.value) return
+
+    try {
+      removeForestLayerFromMap()
+
+      map.value.addSource('forest-source', {
+        type: 'geojson',
+        data: forestData
+      })
+
+      map.value.addLayer({
+        id: 'forest-layer',
+        type: 'fill',
+        source: 'forest-source',
+        paint: {
+          'fill-color': '#228B22',
+          'fill-opacity': 0.6
+        }
+      })
+
+      map.value.addLayer({
+        id: 'forest-layer-border',
+        type: 'line',
+        source: 'forest-source',
+        paint: {
+          'line-color': '#006400',
+          'line-width': 2,
+          'line-opacity': 0.8
+        }
+      })
+
+      forestLayerVisible.value = true
+    } catch (error) {
+      console.error('❌ Error adding forest layer:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Add built-up data as a layer to the map
+   */
+  const addBuiltUpLayerToMap = async (builtUpData: any) => {
+    if (!map.value) return
+
+    try {
+      removeBuiltUpLayerFromMap()
+
+      map.value.addSource('builtup-source', {
+        type: 'geojson',
+        data: builtUpData
+      })
+
+      map.value.addLayer({
+        id: 'builtup-layer',
+        type: 'fill',
+        source: 'builtup-source',
+        paint: {
+          'fill-color': '#FF6B35',
+          'fill-opacity': 0.6
+        }
+      })
+
+      map.value.addLayer({
+        id: 'builtup-layer-border',
+        type: 'line',
+        source: 'builtup-source',
+        paint: {
+          'line-color': '#CC4A00',
+          'line-width': 2,
+          'line-opacity': 0.8
+        }
+      })
+
+      builtUpLayerVisible.value = true
+    } catch (error) {
+      console.error('❌ Error adding built-up layer:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Add water data as a layer to the map
+   */
+  const addWaterLayerToMap = async (waterData: any) => {
+    if (!map.value) return
+
+    try {
+      removeWaterLayerFromMap()
+
+      map.value.addSource('water-source', {
+        type: 'geojson',
+        data: waterData
+      })
+
+      map.value.addLayer({
+        id: 'water-layer',
+        type: 'fill',
+        source: 'water-source',
+        paint: {
+          'fill-color': '#1E90FF',
+          'fill-opacity': 0.6
+        }
+      })
+
+      map.value.addLayer({
+        id: 'water-layer-border',
+        type: 'line',
+        source: 'water-source',
+        paint: {
+          'line-color': '#0066CC',
+          'line-width': 2,
+          'line-opacity': 0.8
+        }
+      })
+
+      waterLayerVisible.value = true
+    } catch (error) {
+      console.error('❌ Error adding water layer:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Add dumpsite data as a layer to the map
+   */
+  const addDumpsiteLayerToMap = async (dumpsiteData: any) => {
+    if (!map.value) return
+
+    try {
+      removeDumpsiteLayerFromMap()
+
+      map.value.addSource('dumpsite-source', {
+        type: 'geojson',
+        data: dumpsiteData
+      })
+
+      map.value.addLayer({
+        id: 'dumpsite-layer',
+        type: 'fill',
+        source: 'dumpsite-source',
+        paint: {
+          'fill-color': '#8B4513',
+          'fill-opacity': 0.6
+        }
+      })
+
+      map.value.addLayer({
+        id: 'dumpsite-layer-border',
+        type: 'line',
+        source: 'dumpsite-source',
+        paint: {
+          'line-color': '#654321',
+          'line-width': 2,
+          'line-opacity': 0.8
+        }
+      })
+
+      dumpsiteLayerVisible.value = true
+    } catch (error) {
+      console.error('❌ Error adding dumpsite layer:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Remove forest layer from map
+   */
+  const removeForestLayerFromMap = () => {
+    if (!map.value) return
+    try {
+      if (map.value.getLayer('forest-layer-border')) map.value.removeLayer('forest-layer-border')
+      if (map.value.getLayer('forest-layer')) map.value.removeLayer('forest-layer')
+      if (map.value.getSource('forest-source')) map.value.removeSource('forest-source')
+      forestLayerVisible.value = false
+    } catch (error) {
+      console.error('❌ Error removing forest layer:', error)
+    }
+  }
+
+  /**
+   * Remove built-up layer from map
+   */
+  const removeBuiltUpLayerFromMap = () => {
+    if (!map.value) return
+    try {
+      if (map.value.getLayer('builtup-layer-border')) map.value.removeLayer('builtup-layer-border')
+      if (map.value.getLayer('builtup-layer')) map.value.removeLayer('builtup-layer')
+      if (map.value.getSource('builtup-source')) map.value.removeSource('builtup-source')
+      builtUpLayerVisible.value = false
+    } catch (error) {
+      console.error('❌ Error removing built-up layer:', error)
+    }
+  }
+
+  /**
+   * Remove water layer from map
+   */
+  const removeWaterLayerFromMap = () => {
+    if (!map.value) return
+    try {
+      if (map.value.getLayer('water-layer-border')) map.value.removeLayer('water-layer-border')
+      if (map.value.getLayer('water-layer')) map.value.removeLayer('water-layer')
+      if (map.value.getSource('water-source')) map.value.removeSource('water-source')
+      waterLayerVisible.value = false
+    } catch (error) {
+      console.error('❌ Error removing water layer:', error)
+    }
+  }
+
+  /**
+   * Remove dumpsite layer from map
+   */
+  const removeDumpsiteLayerFromMap = () => {
+    if (!map.value) return
+    try {
+      if (map.value.getLayer('dumpsite-layer-border')) map.value.removeLayer('dumpsite-layer-border')
+      if (map.value.getLayer('dumpsite-layer')) map.value.removeLayer('dumpsite-layer')
+      if (map.value.getSource('dumpsite-source')) map.value.removeSource('dumpsite-source')
+      dumpsiteLayerVisible.value = false
+    } catch (error) {
+      console.error('❌ Error removing dumpsite layer:', error)
+    }
+  }
+
+  /**
    * Remove flood layer from map
    */
   const removeFloodLayerFromMap = () => {
@@ -236,11 +754,27 @@ export const useSatelliteFloodStore = createGlobalState(() => {
   }
 
   /**
+   * Clear all analysis results and layers
+   */
+  const clearAllResults = () => {
+    floodResults.value = null
+    forestResults.value = null
+    builtUpResults.value = null
+    waterResults.value = null
+    dumpsiteResults.value = null
+    currentAnalysisArea.value = null
+    removeFloodLayerFromMap()
+    removeForestLayerFromMap()
+    removeBuiltUpLayerFromMap()
+    removeWaterLayerFromMap()
+    removeDumpsiteLayerFromMap()
+  }
+
+  /**
    * Clear flood analysis results and layer
    */
   const clearFloodResults = () => {
     floodResults.value = null
-    currentAnalysisArea.value = null
     removeFloodLayerFromMap()
   }
 
@@ -276,18 +810,44 @@ export const useSatelliteFloodStore = createGlobalState(() => {
   return {
     // State
     isAnalyzing,
+    isAnalyzingFlood,
+    isAnalyzingForest,
+    isAnalyzingBuiltUp,
+    isAnalyzingWater,
+    isAnalyzingDumpsite,
     floodResults,
+    forestResults,
+    builtUpResults,
+    waterResults,
+    dumpsiteResults,
     floodLayerVisible,
+    forestLayerVisible,
+    builtUpLayerVisible,
+    waterLayerVisible,
+    dumpsiteLayerVisible,
     currentAnalysisArea,
     
     // Actions
     runFloodAnalysis,
+    runForestAnalysis,
+    runBuiltUpAnalysis,
+    runWaterAnalysis,
+    runDumpsiteAnalysis,
     clearFloodResults,
+    clearAllResults,
     toggleFloodLayer,
     checkServerHealth,
     
     // Map layer management
     addFloodLayerToMap,
-    removeFloodLayerFromMap
+    removeFloodLayerFromMap,
+    addForestLayerToMap,
+    removeForestLayerFromMap,
+    addBuiltUpLayerToMap,
+    removeBuiltUpLayerFromMap,
+    addWaterLayerToMap,
+    removeWaterLayerFromMap,
+    addDumpsiteLayerToMap,
+    removeDumpsiteLayerFromMap
   }
 })

@@ -5,11 +5,31 @@ import { useMapAreasStore } from '../../stores/mapAreas.store'
 import { useSatelliteFloodStore } from '../../stores/satelliteFlood.store.ts'
 
 const { selectedArea, showAreaDetails, clearSelectedArea } = useMapAreasStore()
-const { runFloodAnalysis, isAnalyzing, floodResults, clearFloodResults, floodLayerVisible } = useSatelliteFloodStore()
+const { 
+  runFloodAnalysis, 
+  runForestAnalysis,
+  runBuiltUpAnalysis,
+  runWaterAnalysis,
+  runDumpsiteAnalysis,
+  isAnalyzing,
+  isAnalyzingFlood,
+  isAnalyzingForest,
+  isAnalyzingBuiltUp,
+  isAnalyzingWater,
+  isAnalyzingDumpsite,
+  floodResults, 
+  forestResults,
+  builtUpResults,
+  waterResults,
+  dumpsiteResults,
+  clearFloodResults,
+  clearAllResults,
+  floodLayerVisible 
+} = useSatelliteFloodStore()
 
-// Analysis date range
-const analysisStartDate = ref('2024-08-01')
-const analysisEndDate = ref('2024-08-31')
+// Analysis date range - using more recent dates for better data availability
+const analysisStartDate = ref('2024-01-01')
+const analysisEndDate = ref('2024-03-31')
 
 const areaDetails = computed(() => {
   if (!selectedArea.value) return null
@@ -28,7 +48,7 @@ const areaDetails = computed(() => {
 
 const handleClose = () => {
   clearSelectedArea()
-  clearFloodResults()
+  clearAllResults()
 }
 
 const errorMessage = ref<string | null>(null)
@@ -48,6 +68,74 @@ const handleFloodAnalysis = async () => {
   } catch (error: any) {
     console.error('Flood analysis failed:', error)
     errorMessage.value = error.message || 'Flood analysis failed. Please try again.'
+  }
+}
+
+const handleForestAnalysis = async () => {
+  if (!selectedArea.value) return
+  
+  errorMessage.value = null
+  
+  try {
+    await runForestAnalysis(
+      selectedArea.value,
+      analysisStartDate.value,
+      analysisEndDate.value
+    )
+  } catch (error: any) {
+    console.error('Forest analysis failed:', error)
+    errorMessage.value = error.message || 'Forest analysis failed. Please try again.'
+  }
+}
+
+const handleBuiltUpAnalysis = async () => {
+  if (!selectedArea.value) return
+  
+  errorMessage.value = null
+  
+  try {
+    await runBuiltUpAnalysis(
+      selectedArea.value,
+      analysisStartDate.value,
+      analysisEndDate.value
+    )
+  } catch (error: any) {
+    console.error('Built-up analysis failed:', error)
+    errorMessage.value = error.message || 'Built-up analysis failed. Please try again.'
+  }
+}
+
+const handleWaterAnalysis = async () => {
+  if (!selectedArea.value) return
+  
+  errorMessage.value = null
+  
+  try {
+    await runWaterAnalysis(
+      selectedArea.value,
+      analysisStartDate.value,
+      analysisEndDate.value
+    )
+  } catch (error: any) {
+    console.error('Water analysis failed:', error)
+    errorMessage.value = error.message || 'Water analysis failed. Please try again.'
+  }
+}
+
+const handleDumpsiteAnalysis = async () => {
+  if (!selectedArea.value) return
+  
+  errorMessage.value = null
+  
+  try {
+    await runDumpsiteAnalysis(
+      selectedArea.value,
+      analysisStartDate.value,
+      analysisEndDate.value
+    )
+  } catch (error: any) {
+    console.error('Dumpsite analysis failed:', error)
+    errorMessage.value = error.message || 'Dumpsite analysis failed. Please try again.'
   }
 }
 </script>
@@ -143,6 +231,50 @@ const handleFloodAnalysis = async () => {
         </VCardText>
       </VCard>
 
+      <!-- Analysis Configuration -->
+      <VCard variant="outlined" class="mb-4">
+        <VCardTitle class="text-subtitle-1 pb-2">
+          📅 Analysis Period Configuration
+        </VCardTitle>
+        <VCardText>
+          <div class="date-range-selection">
+            <p class="text-subtitle-2 mb-2">Satellite Data Period</p>
+            <VRow class="ma-0">
+              <VCol cols="6" class="pa-1">
+                <VTextField
+                  v-model="analysisStartDate"
+                  type="date"
+                  label="Start Date"
+                  variant="outlined"
+                  density="compact"
+                  hide-details
+                />
+              </VCol>
+              <VCol cols="6" class="pa-1">
+                <VTextField
+                  v-model="analysisEndDate"
+                  type="date"
+                  label="End Date"
+                  variant="outlined"
+                  density="compact"
+                  hide-details
+                />
+              </VCol>
+            </VRow>
+            <VAlert
+              type="info"
+              variant="tonal"
+              density="compact"
+              class="mt-2"
+            >
+              <template #text>
+                This date range applies to all satellite analysis types below.
+              </template>
+            </VAlert>
+          </div>
+        </VCardText>
+      </VCard>
+
       <!-- Satellite Flood Analysis -->
       <VCard variant="outlined" class="mb-4">
         <VCardTitle class="text-subtitle-1 pb-2">
@@ -151,37 +283,15 @@ const handleFloodAnalysis = async () => {
         </VCardTitle>
         <VCardText>
           <div class="flood-analysis-section">
-            <!-- Date Range Selection -->
-            <div class="date-range-selection mb-3">
-              <p class="text-subtitle-2 mb-2">Analysis Period</p>
-              <VRow class="ma-0">
-                <VCol cols="6" class="pa-1">
-                  <VTextField
-                    v-model="analysisStartDate"
-                    type="date"
-                    label="Start Date"
-                    variant="outlined"
-                    density="compact"
-                    hide-details
-                  />
-                </VCol>
-                <VCol cols="6" class="pa-1">
-                  <VTextField
-                    v-model="analysisEndDate"
-                    type="date"
-                    label="End Date"
-                    variant="outlined"
-                    density="compact"
-                    hide-details
-                  />
-                </VCol>
-              </VRow>
+            <div class="analysis-period-info mb-2">
+              <VChip size="small" color="grey" variant="outlined">
+                Period: {{ analysisStartDate }} → {{ analysisEndDate }}
+              </VChip>
             </div>
-
             <!-- Analysis Button -->
             <VBtn
-              :loading="isAnalyzing"
-              :disabled="isAnalyzing"
+              :loading="isAnalyzingFlood"
+              :disabled="isAnalyzingFlood"
               color="primary"
               variant="flat"
               block
@@ -189,7 +299,7 @@ const handleFloodAnalysis = async () => {
               @click="handleFloodAnalysis"
             >
               <PhRadioButton size="16" class="mr-2" />
-              {{ isAnalyzing ? 'Analyzing Satellite Data...' : 'Run Flood Analysis' }}
+              {{ isAnalyzingFlood ? 'Analyzing Satellite Data...' : 'Run Flood Analysis' }}
             </VBtn>
 
             <!-- Error Message -->
@@ -299,6 +409,314 @@ const handleFloodAnalysis = async () => {
                   </VExpansionPanelText>
                 </VExpansionPanel>
               </VExpansionPanels>
+            </div>
+          </div>
+        </VCardText>
+      </VCard>
+
+      <!-- Forest Analysis -->
+      <VCard variant="outlined" class="mb-4">
+        <VCardTitle class="text-subtitle-1 pb-2">
+          🌲 Forest Cover Analysis
+        </VCardTitle>
+        <VCardText>
+          <div class="analysis-section">
+            <div class="analysis-period-info mb-2">
+              <VChip size="small" color="grey" variant="outlined">
+                Period: {{ analysisStartDate }} → {{ analysisEndDate }}
+              </VChip>
+            </div>
+            
+            <VBtn
+              :loading="isAnalyzingForest"
+              :disabled="isAnalyzingForest"
+              color="success"
+              variant="flat"
+              block
+              class="mb-3"
+              @click="handleForestAnalysis"
+            >
+              🌲 {{ isAnalyzingForest ? 'Analyzing Forest Cover...' : 'Analyze Forest Cover' }}
+            </VBtn>
+
+            <!-- Forest Results -->
+            <div v-if="forestResults" class="analysis-results">
+              <VDivider class="mb-3" />
+              
+              <div class="results-header mb-3">
+                <div class="d-flex align-center justify-space-between">
+                  <h4 class="text-h6">Forest Analysis Results</h4>
+                  <VChip 
+                    :color="forestResults.forestData.features.length > 0 ? 'success' : 'warning'"
+                    size="small"
+                  >
+                    {{ forestResults.forestData.features.length > 0 ? 'Forest Detected' : 'No Forest' }}
+                  </VChip>
+                </div>
+              </div>
+
+              <div class="results-details">
+                <div class="info-item">
+                  <span class="info-label">Forest Areas:</span>
+                  <span class="info-value">{{ forestResults.forestData.features.length }} polygons</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Index:</span>
+                  <span class="info-value">{{ forestResults.metadata.index }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Sensor:</span>
+                  <span class="info-value">{{ forestResults.metadata.sensor }}</span>
+                </div>
+              </div>
+
+              <div v-if="forestResults.forestData.features.length > 0" class="forest-areas-details mt-3">
+                <VAlert type="success" variant="tonal" density="compact">
+                  <template #text>
+                    🌲 {{ forestResults.forestData.features.length }} forest area{{ forestResults.forestData.features.length > 1 ? 's' : '' }} 
+                    detected in {{ areaDetails?.name }}.
+                  </template>
+                </VAlert>
+              </div>
+              
+              <div v-else class="no-forest-message mt-3">
+                <VAlert type="info" variant="tonal" density="compact">
+                  <template #text>
+                    {{ forestResults.metadata.note || `No forest areas detected in ${areaDetails?.name} during the analysis period.` }}
+                  </template>
+                </VAlert>
+              </div>
+            </div>
+          </div>
+        </VCardText>
+      </VCard>
+
+      <!-- Built-up Analysis -->
+      <VCard variant="outlined" class="mb-4">
+        <VCardTitle class="text-subtitle-1 pb-2">
+          🏙️ Built-up Area Analysis
+        </VCardTitle>
+        <VCardText>
+          <div class="analysis-section">
+            <div class="analysis-period-info mb-2">
+              <VChip size="small" color="grey" variant="outlined">
+                Period: {{ analysisStartDate }} → {{ analysisEndDate }}
+              </VChip>
+            </div>
+            
+            <VBtn
+              :loading="isAnalyzingBuiltUp"
+              :disabled="isAnalyzingBuiltUp"
+              color="orange"
+              variant="flat"
+              block
+              class="mb-3"
+              @click="handleBuiltUpAnalysis"
+            >
+              🏙️ {{ isAnalyzingBuiltUp ? 'Analyzing Built-up Areas...' : 'Analyze Built-up Areas' }}
+            </VBtn>
+
+            <!-- Built-up Results -->
+            <div v-if="builtUpResults" class="analysis-results">
+              <VDivider class="mb-3" />
+              
+              <div class="results-header mb-3">
+                <div class="d-flex align-center justify-space-between">
+                  <h4 class="text-h6">Built-up Analysis Results</h4>
+                  <VChip 
+                    :color="builtUpResults.builtUpData.features.length > 0 ? 'orange' : 'grey'"
+                    size="small"
+                  >
+                    {{ builtUpResults.builtUpData.features.length > 0 ? 'Development Detected' : 'No Development' }}
+                  </VChip>
+                </div>
+              </div>
+
+              <div class="results-details">
+                <div class="info-item">
+                  <span class="info-label">Built-up Areas:</span>
+                  <span class="info-value">{{ builtUpResults.builtUpData.features.length }} polygons</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Index:</span>
+                  <span class="info-value">{{ builtUpResults.metadata.index }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Sensor:</span>
+                  <span class="info-value">{{ builtUpResults.metadata.sensor }}</span>
+                </div>
+              </div>
+
+              <div v-if="builtUpResults.builtUpData.features.length > 0" class="builtup-areas-details mt-3">
+                <VAlert type="info" variant="tonal" density="compact">
+                  <template #text>
+                    🏙️ {{ builtUpResults.builtUpData.features.length }} built-up area{{ builtUpResults.builtUpData.features.length > 1 ? 's' : '' }} 
+                    detected in {{ areaDetails?.name }}.
+                  </template>
+                </VAlert>
+              </div>
+              
+              <div v-else class="no-builtup-message mt-3">
+                <VAlert type="info" variant="tonal" density="compact">
+                  <template #text>
+                    {{ builtUpResults.metadata.note || `No built-up areas detected in ${areaDetails?.name} during the analysis period.` }}
+                  </template>
+                </VAlert>
+              </div>
+            </div>
+          </div>
+        </VCardText>
+      </VCard>
+
+      <!-- Water Bodies Analysis -->
+      <VCard variant="outlined" class="mb-4">
+        <VCardTitle class="text-subtitle-1 pb-2">
+          💧 Water Bodies Analysis
+        </VCardTitle>
+        <VCardText>
+          <div class="analysis-section">
+            <div class="analysis-period-info mb-2">
+              <VChip size="small" color="grey" variant="outlined">
+                Period: {{ analysisStartDate }} → {{ analysisEndDate }}
+              </VChip>
+            </div>
+            
+            <VBtn
+              :loading="isAnalyzingWater"
+              :disabled="isAnalyzingWater"
+              color="blue"
+              variant="flat"
+              block
+              class="mb-3"
+              @click="handleWaterAnalysis"
+            >
+              💧 {{ isAnalyzingWater ? 'Analyzing Water Bodies...' : 'Analyze Water Bodies' }}
+            </VBtn>
+
+            <!-- Water Results -->
+            <div v-if="waterResults" class="analysis-results">
+              <VDivider class="mb-3" />
+              
+              <div class="results-header mb-3">
+                <div class="d-flex align-center justify-space-between">
+                  <h4 class="text-h6">Water Bodies Results</h4>
+                  <VChip 
+                    :color="waterResults.waterData.features.length > 0 ? 'blue' : 'grey'"
+                    size="small"
+                  >
+                    {{ waterResults.waterData.features.length > 0 ? 'Water Detected' : 'No Water' }}
+                  </VChip>
+                </div>
+              </div>
+
+              <div class="results-details">
+                <div class="info-item">
+                  <span class="info-label">Water Bodies:</span>
+                  <span class="info-value">{{ waterResults.waterData.features.length }} polygons</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Index:</span>
+                  <span class="info-value">{{ waterResults.metadata.index }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Sensor:</span>
+                  <span class="info-value">{{ waterResults.metadata.sensor }}</span>
+                </div>
+              </div>
+
+              <div v-if="waterResults.waterData.features.length > 0" class="water-areas-details mt-3">
+                <VAlert type="info" variant="tonal" density="compact">
+                  <template #text>
+                    💧 {{ waterResults.waterData.features.length }} water bod{{ waterResults.waterData.features.length > 1 ? 'ies' : 'y' }} 
+                    detected in {{ areaDetails?.name }}.
+                  </template>
+                </VAlert>
+              </div>
+              
+              <div v-else class="no-water-message mt-3">
+                <VAlert type="info" variant="tonal" density="compact">
+                  <template #text>
+                    {{ waterResults.metadata.note || `No water bodies detected in ${areaDetails?.name} during the analysis period.` }}
+                  </template>
+                </VAlert>
+              </div>
+            </div>
+          </div>
+        </VCardText>
+      </VCard>
+
+      <!-- Dumpsite Detection -->
+      <VCard variant="outlined" class="mb-4">
+        <VCardTitle class="text-subtitle-1 pb-2">
+          🗑️ Dumpsite Detection
+        </VCardTitle>
+        <VCardText>
+          <div class="analysis-section">
+            <div class="analysis-period-info mb-2">
+              <VChip size="small" color="grey" variant="outlined">
+                Period: {{ analysisStartDate }} → {{ analysisEndDate }}
+              </VChip>
+            </div>
+            
+            <VBtn
+              :loading="isAnalyzingDumpsite"
+              :disabled="isAnalyzingDumpsite"
+              color="brown"
+              variant="flat"
+              block
+              class="mb-3"
+              @click="handleDumpsiteAnalysis"
+            >
+              🗑️ {{ isAnalyzingDumpsite ? 'Detecting Dumpsites...' : 'Detect Dumpsites' }}
+            </VBtn>
+
+            <!-- Dumpsite Results -->
+            <div v-if="dumpsiteResults" class="analysis-results">
+              <VDivider class="mb-3" />
+              
+              <div class="results-header mb-3">
+                <div class="d-flex align-center justify-space-between">
+                  <h4 class="text-h6">Dumpsite Detection Results</h4>
+                  <VChip 
+                    :color="dumpsiteResults.dumpsiteData.features.length > 0 ? 'brown' : 'success'"
+                    size="small"
+                  >
+                    {{ dumpsiteResults.dumpsiteData.features.length > 0 ? 'Potential Dumpsites' : 'No Dumpsites' }}
+                  </VChip>
+                </div>
+              </div>
+
+              <div class="results-details">
+                <div class="info-item">
+                  <span class="info-label">Potential Dumpsites:</span>
+                  <span class="info-value">{{ dumpsiteResults.dumpsiteData.features.length }} polygons</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Method:</span>
+                  <span class="info-value">{{ dumpsiteResults.metadata.method }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Sensor:</span>
+                  <span class="info-value">{{ dumpsiteResults.metadata.sensor }}</span>
+                </div>
+              </div>
+
+              <div v-if="dumpsiteResults.dumpsiteData.features.length > 0" class="dumpsite-areas-details mt-3">
+                <VAlert type="warning" variant="tonal" density="compact">
+                  <template #text>
+                    🗑️ {{ dumpsiteResults.dumpsiteData.features.length }} potential dumpsite{{ dumpsiteResults.dumpsiteData.features.length > 1 ? 's' : '' }} 
+                    detected in {{ areaDetails?.name }}.
+                  </template>
+                </VAlert>
+              </div>
+              
+              <div v-else class="no-dumpsite-message mt-3">
+                <VAlert type="success" variant="tonal" density="compact">
+                  <template #text>
+                    {{ dumpsiteResults.metadata.note || `No potential dumpsites detected in ${areaDetails?.name} during the analysis period.` }}
+                  </template>
+                </VAlert>
+              </div>
             </div>
           </div>
         </VCardText>
@@ -477,5 +895,16 @@ const handleFloodAnalysis = async () => {
 
 .technical-details strong {
   color: #333;
+}
+
+/* Analysis Period Info */
+.analysis-period-info {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.analysis-section {
+  width: 100%;
 }
 </style>
