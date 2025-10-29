@@ -6,6 +6,7 @@ import {
   PhPlusCircle,
   PhHouse,
   PhGear,
+  PhTree,
 } from "@phosphor-icons/vue";
 
 import { ref, computed, defineComponent, markRaw } from 'vue';

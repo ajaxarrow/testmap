@@ -1,7 +1,9 @@
 import { ref } from 'vue'
 import { createGlobalState } from '@vueuse/core'
 import { useMapStore } from './map.store'
-
+import { useMapAreasStore } from './mapAreas.store'
+import type { AreaData } from "../interfaces";
+import barangaysData from '@/data/barangays_data.json'
 export interface MapStyle {
   key: string
   name: string
@@ -13,6 +15,7 @@ export interface MapStyle {
 
 export const useMapStyleStore = createGlobalState(() => {
   const { map } = useMapStore()
+  const {setupAreas} = useMapAreasStore();
   
   // Available map styles
   const availableStyles: MapStyle[] = [
@@ -56,15 +59,40 @@ export const useMapStyleStore = createGlobalState(() => {
   // Current selected style (default to satellite)
   const currentStyle = ref<string>('satellite')
 
+  // localStorage key for storing map style preference
+  const STORAGE_KEY = 'mapStyle'
+
+  /**
+   * Save current style to localStorage
+   */
+  const saveStyleToStorage = (styleKey: string) => {
+    try {
+      localStorage.setItem(STORAGE_KEY, styleKey)
+    } catch (error) {
+      console.warn('Failed to save map style to localStorage:', error)
+    }
+  }
+
+  /**
+   * Load style from localStorage
+   */
+  const loadStyleFromStorage = (): string => {
+    try {
+      const savedStyle = localStorage.getItem(STORAGE_KEY)
+      if (savedStyle && availableStyles.some(s => s.key === savedStyle)) {
+        return savedStyle
+      }
+    } catch (error) {
+      console.warn('Failed to load map style from localStorage:', error)
+    }
+    // Return default style if nothing saved or error occurred
+    return 'satellite'
+  }
+
   /**
    * Change the map style
    */
   const changeMapStyle = (styleKey: string) => {
-    if (!map.value) {
-      console.warn('Map not initialized')
-      return
-    }
-
     const style = availableStyles.find(s => s.key === styleKey)
     if (!style) {
       console.error('Style not found:', styleKey)
@@ -72,69 +100,14 @@ export const useMapStyleStore = createGlobalState(() => {
     }
 
     console.log(`🗺️ Changing map style to: ${style.name} (${style.provider})`)
-
-    try {
-      // Store current layers and sources to preserve them
-      const currentLayers = map.value.getStyle().layers || []
-      const currentSources = map.value.getStyle().sources || {}
-      
-      // Filter out default style layers, keep only custom layers
-      const customLayers = currentLayers.filter(layer => {
-        // Keep layers that are not part of the base style
-        return layer.id.includes('id-') || 
-               layer.id.includes('flood') || 
-               layer.id.includes('satellite') ||
-               layer.id.includes('analysis')
-      })
-
-      const customSources = Object.keys(currentSources).reduce((acc, sourceId) => {
-        // Keep sources that are not part of the base style
-        if (sourceId.includes('flood') || 
-            sourceId.includes('satellite') ||
-            sourceId.includes('analysis') ||
-            !sourceId.startsWith('mapbox://') &&
-            !sourceId.startsWith('maptiler://')) {
-          acc[sourceId] = currentSources[sourceId]
-        }
-        return acc
-      }, {} as any)
-
-      // Change the style
-      map.value.setStyle(style.url)
-
-      // Wait for style to load and re-add custom layers
-      map.value.once('style.load', () => {
-        console.log('✅ New style loaded, restoring custom layers...')
-        
-        try {
-          // Re-add custom sources
-          Object.keys(customSources).forEach(sourceId => {
-            if (!map.value?.getSource(sourceId)) {
-              map.value?.addSource(sourceId, customSources[sourceId])
-            }
-          })
-
-          // Re-add custom layers
-          customLayers.forEach(layer => {
-            if (!map.value?.getLayer(layer.id)) {
-              map.value?.addLayer(layer)
-            }
-          })
-
-          console.log('✅ Custom layers restored successfully')
-        } catch (error) {
-          console.warn('⚠️ Some custom layers could not be restored:', error)
-        }
-      })
-
-      // Update current style
-      currentStyle.value = styleKey
-      
-      console.log(`✅ Map style changed to ${style.name}`)
-
-    } catch (error) {
-      console.error('❌ Error changing map style:', error)
-    }
+    
+    // Update current style - this will trigger the watcher in Map.vue
+    currentStyle.value = styleKey
+    
+    // Save to localStorage
+    saveStyleToStorage(styleKey)
+    
+    console.log(`✅ Map style changed to ${style.name}`)
   }
 
   /**
@@ -145,11 +118,13 @@ export const useMapStyleStore = createGlobalState(() => {
   }
 
   /**
-   * Initialize with default style
+   * Initialize with default style or load from localStorage
    */
   const initializeMapStyle = () => {
-    // Set default to satellite as requested
-    currentStyle.value = 'satellite'
+    // Load from localStorage, fallback to satellite if nothing saved
+    const savedStyle = loadStyleFromStorage()
+    currentStyle.value = savedStyle
+    console.log(`🎨 Initialized map style: ${savedStyle} ${savedStyle !== 'satellite' ? '(from localStorage)' : '(default)'}`)
   }
 
   /**
@@ -169,6 +144,8 @@ export const useMapStyleStore = createGlobalState(() => {
     changeMapStyle,
     getCurrentStyleInfo,
     initializeMapStyle,
-    getStyleUrl
+    getStyleUrl,
+    saveStyleToStorage,
+    loadStyleFromStorage
   }
 })

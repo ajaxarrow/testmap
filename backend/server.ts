@@ -293,422 +293,206 @@ router.post("/analyze-forest", async (req: Request, res: Response) => {
   }
 });
 
-/* =========================================================
-   🏙 2. Built-up Zone Analysis (NDBI-based)
-   ========================================================= */
-router.post("/analyze-builtup", async (req: Request, res: Response) => {
+router.post("/analyze-illegal-logging", async (req: Request, res: Response) => {
   try {
-    console.log("🏗 Starting built-up analysis...");
+    console.log("🪓 Starting illegal logging analysis...");
     const { geometry, startDate, endDate, areaName } = req.body;
-    const region = toEEGeometry(geometry);
 
-    let s2Collection = ee.ImageCollection("COPERNICUS/S2_SR")
-      .filterBounds(region)
-      .filterDate(startDate, endDate)
-      .filter((ee.Filter as any).lt("CLOUDY_PIXEL_PERCENTAGE", 50));
+    if (!geometry) return res.status(400).json({ error: "Geometry is required" });
+    if (!startDate || !endDate) return res.status(400).json({ error: "Start and end dates are required" });
 
-    // Ensure homogeneous collection by selecting only NDBI bands
-    s2Collection = (s2Collection as any).map((img: any) => {
-      return img.select(['B8', 'B11']).set('system:time_start', img.get('system:time_start'));
+    const region = ee.Geometry(geometry);
+    console.log(`📍 Area: ${areaName || "Unknown"} | 📅 ${startDate} to ${endDate}`);
+
+    // Hansen Global Forest Change dataset
+    const hansen = (ee as any).Image("UMD/hansen/global_forest_change_2022_v1_10");
+    const treeCover = hansen.select("treecover2000");
+    const lossYear = hansen.select("lossyear"); // 1 = 2001, 22 = 2022
+
+    // Calculate forest loss within the selected date range
+    const startYear = new Date(startDate).getFullYear() - 2000;
+    const endYear = new Date(endDate).getFullYear() - 2000;
+    
+    // Validate year range (Hansen data goes from 2001-2022)
+    const validStartYear = Math.max(1, Math.min(22, startYear));
+    const validEndYear = Math.max(1, Math.min(22, endYear));
+    
+    console.log(`🗓️ Analyzing forest loss from ${validStartYear + 2000} to ${validEndYear + 2000}`);
+    
+    // Create mask for forest loss in the specified period
+    // Only include areas with initial tree cover > 10%
+    const treeCoverMask = treeCover.gte(10);
+    const lossMask = lossYear.gte(validStartYear)
+      .and(lossYear.lte(validEndYear))
+      .and(treeCoverMask)
+      .selfMask();
+
+    console.log("🗺️ Converting forest loss areas to polygons...");
+    const lossPolygons = lossMask.reduceToVectors({
+      geometry: region,
+      scale: 30,
+      geometryType: "polygon",
+      eightConnected: false,
+      labelProperty: "forest_loss",
+      maxPixels: 1e8,
     });
 
-    // Check if we have any images
-    const imageCount = (s2Collection as any).size();
-    
-    imageCount.evaluate((count: number, error: any) => {
+    lossPolygons.evaluate((result: any, error: any) => {
       if (error) {
-        console.error("❌ Error checking image count:", error);
+        console.error("❌ Earth Engine error:", error);
         return res.status(500).json({ error: error.message });
+      }
+
+      console.log("✅ Illegal logging analysis completed");
+      res.json({
+        success: true,
+        area: areaName || "Unknown",
+        dateRange: `${startDate} to ${endDate}`,
+        forestLossData: result,
+        metadata: {
+          dataset: "Hansen Global Forest Change (v1.10)",
+          analysisYears: `${validStartYear + 2000}-${validEndYear + 2000}`,
+          treeCoverThreshold: "≥10%",
+          scale: "30m",
+          analysisDate: new Date().toISOString(),
+        },
+      });
+    });
+  } catch (error: any) {
+    console.error("❌ Illegal logging analysis error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+router.post("/analyze-forest-fires", async (req: Request, res: Response) => {
+  try {
+    console.log("🔥 Starting forest fire analysis...");
+    const { geometry, startDate, endDate, areaName } = req.body;
+
+    if (!geometry) return res.status(400).json({ error: "Geometry is required" });
+    if (!startDate || !endDate) return res.status(400).json({ error: "Start and end dates are required" });
+
+    const region = (ee as any).Geometry(geometry);
+    console.log(`📍 Area: ${areaName || "Unknown"} | 📅 ${startDate} to ${endDate}`);
+
+    // MODIS Burned Area Product
+    console.log("🛰️ Fetching MODIS Burned Area data...");
+    const modis = (ee as any).ImageCollection("MODIS/006/MCD64A1")
+      .filterBounds(region)
+      .filterDate(startDate, endDate)
+      .select('BurnDate');
+
+    // Sentinel-2 for Normalized Burn Ratio (NBR)
+    console.log("🌿 Calculating Sentinel-2 NBR...");
+    const s2Collection = (ee as any).ImageCollection("COPERNICUS/S2_SR")
+      .filterBounds(region)
+      .filterDate(startDate, endDate)
+      .filter((ee as any).Filter.lt("CLOUDY_PIXEL_PERCENTAGE", 30));
+
+    // Check if we have enough data
+    const imageCount = s2Collection.size();
+    
+    imageCount.evaluate((count: number, countError: any) => {
+      if (countError) {
+        console.error("❌ Error checking image count:", countError);
+        return res.status(500).json({ error: countError.message });
       }
       
       if (count === 0) {
-        console.log("⚠️ No Sentinel-2 images found for built-up analysis");
-        return res.json({
-          success: true,
-          area: areaName || "Unknown",
-          dateRange: `${startDate} → ${endDate}`,
-          builtUpData: {
-            type: "FeatureCollection",
-            features: []
-          },
-          metadata: {
-            sensor: "Sentinel-2",
-            index: "NDBI > 0.1",
-            scale: "30m",
-            analysisDate: new Date().toISOString(),
-            note: "No satellite data available for the specified period and area"
-          },
-        });
-      }
-
-      console.log(`📊 Found ${count} images for built-up analysis`);
-
-      const img = s2Collection.median();
-      
-      // Check if the image has the required bands
-      const bandNames = (img as any).bandNames();
-      
-      bandNames.evaluate((bands: string[], bandError: any) => {
-        if (bandError) {
-          console.error("❌ Error checking bands:", bandError);
-          return res.status(500).json({ error: bandError.message });
-        }
+        console.log("⚠️ No Sentinel-2 images found for fire analysis");
         
-        if (!bands || bands.length === 0 || !bands.includes('B11') || !bands.includes('B8')) {
-          console.log("⚠️ Required bands (B11, B8) not available in images");
-          return res.json({
-            success: true,
-            area: areaName || "Unknown",
-            dateRange: `${startDate} → ${endDate}`,
-            builtUpData: {
-              type: "FeatureCollection",
-              features: []
-            },
-            metadata: {
-              sensor: "Sentinel-2",
-              index: "NDBI > 0.1",
-              scale: "30m",
-              analysisDate: new Date().toISOString(),
-              note: "Required spectral bands not available in satellite data"
-            },
-          });
-        }
-
-        console.log(`✅ Processing built-up analysis with bands: ${bands.join(', ')}`);
+        // Try MODIS only approach
+        console.log("🔄 Falling back to MODIS-only analysis...");
         
-        const ndbi = (img as any).normalizedDifference(["B11", "B8"]).rename("NDBI");
-        const builtUpMask = ndbi.gt(0.1).selfMask();
-
-        console.log("🗺️ Vectorizing built-up areas...");
-        const builtUpVectors = builtUpMask.reduceToVectors({
+        const burnedMask = modis.select('BurnDate').gt(0).selfMask();
+        
+        const burnedPolygons = burnedMask.reduceToVectors({
           geometry: region,
-          scale: 30,
+          scale: 500, // MODIS resolution
           geometryType: "polygon",
-          labelProperty: "builtup",
+          labelProperty: "burned_area",
           maxPixels: 1e8,
         });
 
-        builtUpVectors.evaluate((result: any, evalError: any) => {
-          if (evalError) {
-            console.error("❌ Built-up analysis failed:", evalError);
-            return res.status(500).json({ error: evalError.message });
+        burnedPolygons.evaluate((result: any, error: any) => {
+          if (error) {
+            console.error("❌ Earth Engine evaluation error:", error);
+            return res.status(500).json({ error: error.message });
           }
-          console.log("✅ Built-up analysis complete.");
+
+          console.log("✅ Forest fire analysis completed (MODIS only)");
           res.json({
             success: true,
             area: areaName || "Unknown",
-            dateRange: `${startDate} → ${endDate}`,
-            builtUpData: result,
+            dateRange: `${startDate} to ${endDate}`,
+            burnedAreaData: result,
             metadata: {
-              sensor: "Sentinel-2",
-              index: "NDBI > 0.1",
-              scale: "30m",
+              datasets: ["MODIS MCD64A1"],
+              method: "MODIS Burned Area Product",
+              scale: "500m",
               analysisDate: new Date().toISOString(),
-              imageCount: count
+              note: "Analysis used MODIS data only due to insufficient Sentinel-2 coverage"
             },
           });
         });
-      });
-    });
-  } catch (error: any) {
-    console.error("❌ Built-up analysis error:", error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/* =========================================================
-   💧 3. Water Bodies Analysis (MNDWI-based)
-   ========================================================= */
-router.post("/analyze-water", async (req: Request, res: Response) => {
-  try {
-    console.log("💧 Starting water body analysis...");
-    const { geometry, startDate, endDate, areaName } = req.body;
-    const region = toEEGeometry(geometry);
-
-    let s2Collection = ee.ImageCollection("COPERNICUS/S2_SR")
-      .filterBounds(region)
-      .filterDate(startDate, endDate)
-      .filter((ee.Filter as any).lt("CLOUDY_PIXEL_PERCENTAGE", 50));
-
-    // Ensure homogeneous collection by selecting only MNDWI bands
-    s2Collection = (s2Collection as any).map((img: any) => {
-      return img.select(['B3', 'B11']).set('system:time_start', img.get('system:time_start'));
-    });
-
-    // Check if we have any images
-    const imageCount = (s2Collection as any).size();
-    
-    imageCount.evaluate((count: number, error: any) => {
-      if (error) {
-        console.error("❌ Error checking image count:", error);
-        return res.status(500).json({ error: error.message });
+        return;
       }
+
+      console.log(`📊 Found ${count} Sentinel-2 images, processing NBR...`);
       
-      if (count === 0) {
-        console.log("⚠️ No Sentinel-2 images found for water analysis");
-        return res.json({
+      // Calculate NBR (Normalized Burn Ratio)
+      const s2WithNBR = s2Collection.map((img: any) =>
+        img.normalizedDifference(["B8", "B12"]).rename("NBR")
+          .copyProperties(img, ["system:time_start"])
+      );
+
+      // Get median NBR for the period
+      const nbrMedian = s2WithNBR.median();
+      
+      // Simple approach: detect very low NBR values as potential burned areas
+      const burnedMask = nbrMedian.lt(-0.1).selfMask(); // NBR < -0.1 indicates burned areas
+
+      console.log("🗺️ Converting burned areas to polygons...");
+      const burnedPolygons = burnedMask.reduceToVectors({
+        geometry: region,
+        scale: 30,
+        geometryType: "polygon",
+        labelProperty: "burned_area",
+        maxPixels: 1e8,
+      });
+
+      burnedPolygons.evaluate((result: any, error: any) => {
+        if (error) {
+          console.error("❌ Earth Engine evaluation error:", error);
+          return res.status(500).json({ error: error.message });
+        }
+
+        console.log("✅ Forest fire analysis completed successfully");
+        res.json({
           success: true,
           area: areaName || "Unknown",
-          dateRange: `${startDate} → ${endDate}`,
-          waterData: {
-            type: "FeatureCollection",
-            features: []
-          },
+          dateRange: `${startDate} to ${endDate}`,
+          burnedAreaData: result,
           metadata: {
-            sensor: "Sentinel-2",
-            index: "MNDWI > 0",
+            datasets: ["MODIS MCD64A1", "Sentinel-2 NBR"],
+            method: "NBR-based burn detection",
+            threshold: "NBR < -0.1",
             scale: "30m",
+            imageCount: count,
             analysisDate: new Date().toISOString(),
-            note: "No satellite data available for the specified period and area"
           },
         });
-      }
-
-      console.log(`📊 Found ${count} images for water analysis`);
-
-      const median = s2Collection.median();
-      
-      // Check if the image has the required bands
-      const bandNames = (median as any).bandNames();
-      
-      bandNames.evaluate((bands: string[], bandError: any) => {
-        if (bandError) {
-          console.error("❌ Error checking bands:", bandError);
-          return res.status(500).json({ error: bandError.message });
-        }
-        
-        if (!bands || bands.length === 0 || !bands.includes('B3') || !bands.includes('B11')) {
-          console.log("⚠️ Required bands (B3, B11) not available in images");
-          return res.json({
-            success: true,
-            area: areaName || "Unknown",
-            dateRange: `${startDate} → ${endDate}`,
-            waterData: {
-              type: "FeatureCollection",
-              features: []
-            },
-            metadata: {
-              sensor: "Sentinel-2",
-              index: "MNDWI > 0",
-              scale: "30m",
-              analysisDate: new Date().toISOString(),
-              note: "Required spectral bands not available in satellite data"
-            },
-          });
-        }
-
-        console.log(`✅ Processing water analysis with bands: ${bands.join(', ')}`);
-        
-        const mndwi = (median as any).normalizedDifference(["B3", "B11"]).rename("MNDWI");
-        const waterMask = mndwi.gt(0).selfMask();
-
-        console.log("🗺️ Vectorizing water bodies...");
-        const waterVectors = waterMask.reduceToVectors({
-          geometry: region,
-          scale: 30,
-          geometryType: "polygon",
-          labelProperty: "water",
-          maxPixels: 1e8,
-        });
-
-        waterVectors.evaluate((result: any, evalError: any) => {
-          if (evalError) {
-            console.error("❌ Water analysis failed:", evalError);
-            return res.status(500).json({ error: evalError.message });
-          }
-          console.log("✅ Water analysis complete.");
-          res.json({
-            success: true,
-            area: areaName || "Unknown",
-            dateRange: `${startDate} → ${endDate}`,
-            waterData: result,
-            metadata: {
-              sensor: "Sentinel-2",
-              index: "MNDWI > 0",
-              scale: "30m",
-              analysisDate: new Date().toISOString(),
-              imageCount: count
-            },
-          });
-        });
       });
     });
+
   } catch (error: any) {
-    console.error("❌ Water analysis error:", error);
+    console.error("❌ Forest fire analysis error:", error);
     res.status(500).json({ error: error.message });
   }
 });
 
-/* =========================================================
-   🗑 4. Dumpsite Detection (NDVI change + bare index)
-   ========================================================= */
-router.post("/analyze-dumpsites", async (req: Request, res: Response) => {
-  try {
-    console.log("🗑 Starting dumpsite detection...");
-    const { geometry, startDate, endDate, areaName } = req.body;
-    const region = toEEGeometry(geometry);
 
-    // Helper function to create homogeneous collections with specific bands
-    const selectCommonBands = (collection: any) => {
-      return collection.map((img: any) => {
-        return img.select(['B4', 'B8', 'B11']).set('system:time_start', img.get('system:time_start'));
-      });
-    };
-
-    // Use a longer historical period for baseline comparison
-    let preCollection = ee.ImageCollection("COPERNICUS/S2_SR")
-      .filterBounds(region)
-      .filterDate("2023-01-01", "2023-03-31")
-      .filter((ee.Filter as any).lt("CLOUDY_PIXEL_PERCENTAGE", 50));
-
-    let postCollection = ee.ImageCollection("COPERNICUS/S2_SR")
-      .filterBounds(region)
-      .filterDate(startDate, endDate)
-      .filter((ee.Filter as any).lt("CLOUDY_PIXEL_PERCENTAGE", 50));
-
-    // Ensure homogeneous collections by selecting only common bands
-    preCollection = selectCommonBands(preCollection);
-    postCollection = selectCommonBands(postCollection);
-
-    // Check if we have images for both periods
-    const preCount = (preCollection as any).size();
-    const postCount = (postCollection as any).size();
-    
-    preCount.evaluate((preImages: number, preError: any) => {
-      if (preError) {
-        console.error("❌ Error checking pre-period images:", preError);
-        return res.status(500).json({ error: preError.message });
-      }
-      
-      postCount.evaluate((postImages: number, postError: any) => {
-        if (postError) {
-          console.error("❌ Error checking post-period images:", postError);
-          return res.status(500).json({ error: postError.message });
-        }
-        
-        if (preImages === 0 || postImages === 0) {
-          console.log(`⚠️ Insufficient images for dumpsite detection (pre: ${preImages}, post: ${postImages})`);
-          return res.json({
-            success: true,
-            area: areaName || "Unknown",
-            dateRange: `${startDate} → ${endDate}`,
-            dumpsiteData: {
-              type: "FeatureCollection",
-              features: []
-            },
-            metadata: {
-              sensor: "Sentinel-2",
-              method: "NDVI drop < -0.2 & BARE > 0.7",
-              scale: "30m",
-              analysisDate: new Date().toISOString(),
-              note: "Insufficient satellite data for change detection analysis"
-            },
-          });
-        }
-
-        console.log(`📊 Found ${preImages} pre-images and ${postImages} post-images`);
-
-        const preMedian = preCollection.median();
-        const postMedian = postCollection.median();
-
-        // Check if images have required bands
-        const preBands = (preMedian as any).bandNames();
-        const postBands = (postMedian as any).bandNames();
-        
-        preBands.evaluate((preBandList: string[], preBandError: any) => {
-          if (preBandError) {
-            console.error("❌ Error checking pre-period bands:", preBandError);
-            return res.status(500).json({ error: preBandError.message });
-          }
-          
-          postBands.evaluate((postBandList: string[], postBandError: any) => {
-            if (postBandError) {
-              console.error("❌ Error checking post-period bands:", postBandError);
-              return res.status(500).json({ error: postBandError.message });
-            }
-            
-            const requiredBands = ['B4', 'B8', 'B11'];
-            const preHasBands = requiredBands.every(band => preBandList.includes(band));
-            const postHasBands = requiredBands.every(band => postBandList.includes(band));
-            
-            if (!preHasBands || !postHasBands) {
-              console.log("⚠️ Required bands not available for dumpsite analysis");
-              return res.json({
-                success: true,
-                area: areaName || "Unknown",
-                dateRange: `${startDate} → ${endDate}`,
-                dumpsiteData: {
-                  type: "FeatureCollection",
-                  features: []
-                },
-                metadata: {
-                  sensor: "Sentinel-2",
-                  method: "NDVI drop < -0.2 & BARE > 0.7",
-                  scale: "30m",
-                  analysisDate: new Date().toISOString(),
-                  note: "Required spectral bands not available for change detection"
-                },
-              });
-            }
-
-            console.log(`✅ Processing dumpsite analysis with required bands available`);
-
-            // Create homogeneous median images
-            const preMedian = preCollection.median();
-            const postMedian = postCollection.median();
-
-            const ndvi = (img: any) => img.normalizedDifference(["B8", "B4"]).rename("NDVI");
-            const preNDVI = ndvi(preMedian);
-            const postNDVI = ndvi(postMedian);
-            const ndviDiff = postNDVI.subtract(preNDVI);
-
-            const bareIndex = (postMedian as any).expression("(swir + red) / (nir + 0.0001)", {
-              swir: (postMedian as any).select("B11"),
-              red: (postMedian as any).select("B4"),
-              nir: (postMedian as any).select("B8"),
-            }).rename("BARE");
-
-            const candidate = ndviDiff.lt(-0.2).and(bareIndex.gt(0.7)).selfMask();
-
-            console.log("🗺️ Vectorizing candidate dumpsites...");
-            const dumpsiteVectors = candidate.reduceToVectors({
-              geometry: region,
-              scale: 30,
-              geometryType: "polygon",
-              labelProperty: "dumpsite",
-              maxPixels: 1e8,
-            });
-
-            dumpsiteVectors.evaluate((result: any, evalError: any) => {
-              if (evalError) {
-                console.error("❌ Dumpsite analysis failed:", evalError);
-                return res.status(500).json({ error: evalError.message });
-              }
-              console.log("✅ Dumpsite detection complete.");
-              res.json({
-                success: true,
-                area: areaName || "Unknown",
-                dateRange: `${startDate} → ${endDate}`,
-                dumpsiteData: result,
-                metadata: {
-                  sensor: "Sentinel-2",
-                  method: "NDVI drop < -0.2 & BARE > 0.7",
-                  scale: "30m",
-                  analysisDate: new Date().toISOString(),
-                  preImages: preImages,
-                  postImages: postImages
-                },
-              });
-            });
-          });
-        });
-      });
-    });
-  } catch (error: any) {
-    console.error("❌ Dumpsite detection error:", error);
-    res.status(500).json({ error: error.message });
-  }
-});
 
 // Mount all the router endpoints
 app.use('/', router);

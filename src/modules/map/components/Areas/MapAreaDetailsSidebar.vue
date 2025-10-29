@@ -8,20 +8,17 @@ const { selectedArea, showAreaDetails, clearSelectedArea } = useMapAreasStore()
 const { 
   runFloodAnalysis, 
   runForestAnalysis,
-  runBuiltUpAnalysis,
-  runWaterAnalysis,
-  runDumpsiteAnalysis,
+  runIllegalLoggingAnalysis,
+  runForestFireAnalysis,
   isAnalyzing,
   isAnalyzingFlood,
   isAnalyzingForest,
-  isAnalyzingBuiltUp,
-  isAnalyzingWater,
-  isAnalyzingDumpsite,
+  isAnalyzingLogging,
+  isAnalyzingFires,
   floodResults, 
   forestResults,
-  builtUpResults,
-  waterResults,
-  dumpsiteResults,
+  loggingResults,
+  fireResults,
   clearFloodResults,
   clearAllResults,
   floodLayerVisible 
@@ -88,54 +85,37 @@ const handleForestAnalysis = async () => {
   }
 }
 
-const handleBuiltUpAnalysis = async () => {
+const handleIllegalLoggingAnalysis = async () => {
   if (!selectedArea.value) return
   
   errorMessage.value = null
   
   try {
-    await runBuiltUpAnalysis(
+    await runIllegalLoggingAnalysis(
       selectedArea.value,
       analysisStartDate.value,
       analysisEndDate.value
     )
   } catch (error: any) {
-    console.error('Built-up analysis failed:', error)
-    errorMessage.value = error.message || 'Built-up analysis failed. Please try again.'
+    console.error('Illegal logging analysis failed:', error)
+    errorMessage.value = error.message || 'Illegal logging analysis failed. Please try again.'
   }
 }
 
-const handleWaterAnalysis = async () => {
+const handleForestFireAnalysis = async () => {
   if (!selectedArea.value) return
   
   errorMessage.value = null
   
   try {
-    await runWaterAnalysis(
+    await runForestFireAnalysis(
       selectedArea.value,
       analysisStartDate.value,
       analysisEndDate.value
     )
   } catch (error: any) {
-    console.error('Water analysis failed:', error)
-    errorMessage.value = error.message || 'Water analysis failed. Please try again.'
-  }
-}
-
-const handleDumpsiteAnalysis = async () => {
-  if (!selectedArea.value) return
-  
-  errorMessage.value = null
-  
-  try {
-    await runDumpsiteAnalysis(
-      selectedArea.value,
-      analysisStartDate.value,
-      analysisEndDate.value
-    )
-  } catch (error: any) {
-    console.error('Dumpsite analysis failed:', error)
-    errorMessage.value = error.message || 'Dumpsite analysis failed. Please try again.'
+    console.error('Forest fire analysis failed:', error)
+    errorMessage.value = error.message || 'Forest fire analysis failed. Please try again.'
   }
 }
 </script>
@@ -192,22 +172,22 @@ const handleDumpsiteAnalysis = async () => {
           <div class="info-grid">
             <div class="info-item">
               <span class="info-label">Province:</span>
-              <span class="info-value">{{ areaDetails.province }}</span>
+              <span class="info-value">Bukidnon</span>
             </div>
             
             <div v-if="areaDetails.municipality && areaDetails.type === 'Barangay'" class="info-item">
-              <span class="info-label">Municipality:</span>
-              <span class="info-value">{{ areaDetails.municipality }}</span>
+              <span class="info-label">City:</span>
+              <span class="info-value">Malaybalay City</span>
             </div>
             
             <div class="info-item">
               <span class="info-label">Region:</span>
-              <span class="info-value">{{ areaDetails.region }}</span>
+              <span class="info-value">Region X</span>
             </div>
             
             <div class="info-item">
               <span class="info-label">Country:</span>
-              <span class="info-value">{{ areaDetails.fullName }} ({{ areaDetails.iso }})</span>
+              <span class="info-value">Philippines</span>
             </div>
           </div>
         </VCardText>
@@ -491,10 +471,10 @@ const handleDumpsiteAnalysis = async () => {
         </VCardText>
       </VCard>
 
-      <!-- Built-up Analysis -->
+      <!-- Illegal Logging Analysis -->
       <VCard variant="outlined" class="mb-4">
         <VCardTitle class="text-subtitle-1 pb-2">
-          🏙️ Built-up Area Analysis
+          🪓 Illegal Logging Detection
         </VCardTitle>
         <VCardText>
           <div class="analysis-section">
@@ -505,61 +485,65 @@ const handleDumpsiteAnalysis = async () => {
             </div>
             
             <VBtn
-              :loading="isAnalyzingBuiltUp"
-              :disabled="isAnalyzingBuiltUp"
-              color="orange"
+              :loading="isAnalyzingLogging"
+              :disabled="isAnalyzingLogging"
+              color="warning"
               variant="flat"
               block
               class="mb-3"
-              @click="handleBuiltUpAnalysis"
+              @click="handleIllegalLoggingAnalysis"
             >
-              🏙️ {{ isAnalyzingBuiltUp ? 'Analyzing Built-up Areas...' : 'Analyze Built-up Areas' }}
+              🪓 {{ isAnalyzingLogging ? 'Analyzing Forest Loss...' : 'Detect Forest Loss' }}
             </VBtn>
 
-            <!-- Built-up Results -->
-            <div v-if="builtUpResults" class="analysis-results">
+            <!-- Logging Results -->
+            <div v-if="loggingResults" class="analysis-results">
               <VDivider class="mb-3" />
               
               <div class="results-header mb-3">
                 <div class="d-flex align-center justify-space-between">
-                  <h4 class="text-h6">Built-up Analysis Results</h4>
+                  <h4 class="text-h6">Forest Loss Analysis</h4>
                   <VChip 
-                    :color="builtUpResults.builtUpData.features.length > 0 ? 'orange' : 'grey'"
+                    :color="loggingResults.forestLossData.features.length > 0 ? 'warning' : 'success'"
                     size="small"
                   >
-                    {{ builtUpResults.builtUpData.features.length > 0 ? 'Development Detected' : 'No Development' }}
+                    {{ loggingResults.forestLossData.features.length > 0 ? 'Loss Detected' : 'No Loss' }}
                   </VChip>
                 </div>
               </div>
 
               <div class="results-details">
                 <div class="info-item">
-                  <span class="info-label">Built-up Areas:</span>
-                  <span class="info-value">{{ builtUpResults.builtUpData.features.length }} polygons</span>
+                  <span class="info-label">Loss Areas:</span>
+                  <span class="info-value">{{ loggingResults.forestLossData.features.length }} polygons</span>
                 </div>
                 <div class="info-item">
-                  <span class="info-label">Index:</span>
-                  <span class="info-value">{{ builtUpResults.metadata.index }}</span>
+                  <span class="info-label">Dataset:</span>
+                  <span class="info-value">{{ loggingResults.metadata.dataset }}</span>
                 </div>
                 <div class="info-item">
-                  <span class="info-label">Sensor:</span>
-                  <span class="info-value">{{ builtUpResults.metadata.sensor }}</span>
+                  <span class="info-label">Years:</span>
+                  <span class="info-value">{{ loggingResults.metadata.analysisYears }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Tree Cover:</span>
+                  <span class="info-value">{{ loggingResults.metadata.treeCoverThreshold }}</span>
                 </div>
               </div>
 
-              <div v-if="builtUpResults.builtUpData.features.length > 0" class="builtup-areas-details mt-3">
-                <VAlert type="info" variant="tonal" density="compact">
+              <div v-if="loggingResults.forestLossData.features.length > 0" class="logging-areas-details mt-3">
+                <VAlert type="warning" variant="tonal" density="compact">
                   <template #text>
-                    🏙️ {{ builtUpResults.builtUpData.features.length }} built-up area{{ builtUpResults.builtUpData.features.length > 1 ? 's' : '' }} 
-                    detected in {{ areaDetails?.name }}.
+                    🪓 {{ loggingResults.forestLossData.features.length }} forest loss area{{ loggingResults.forestLossData.features.length > 1 ? 's' : '' }} 
+                    detected in {{ areaDetails?.name }} during {{ loggingResults.metadata.analysisYears }}.
                   </template>
                 </VAlert>
               </div>
               
-              <div v-else class="no-builtup-message mt-3">
-                <VAlert type="info" variant="tonal" density="compact">
+              <div v-else class="no-logging-message mt-3">
+                <VAlert type="success" variant="tonal" density="compact">
                   <template #text>
-                    {{ builtUpResults.metadata.note || `No built-up areas detected in ${areaDetails?.name} during the analysis period.` }}
+                    No significant forest loss detected in {{ areaDetails?.name }} during the analysis period.
                   </template>
                 </VAlert>
               </div>
@@ -568,10 +552,10 @@ const handleDumpsiteAnalysis = async () => {
         </VCardText>
       </VCard>
 
-      <!-- Water Bodies Analysis -->
+      <!-- Forest Fire Analysis -->
       <VCard variant="outlined" class="mb-4">
         <VCardTitle class="text-subtitle-1 pb-2">
-          💧 Water Bodies Analysis
+          🔥 Forest Fire Detection
         </VCardTitle>
         <VCardText>
           <div class="analysis-section">
@@ -582,138 +566,69 @@ const handleDumpsiteAnalysis = async () => {
             </div>
             
             <VBtn
-              :loading="isAnalyzingWater"
-              :disabled="isAnalyzingWater"
-              color="blue"
+              :loading="isAnalyzingFires"
+              :disabled="isAnalyzingFires"
+              color="error"
               variant="flat"
               block
               class="mb-3"
-              @click="handleWaterAnalysis"
+              @click="handleForestFireAnalysis"
             >
-              💧 {{ isAnalyzingWater ? 'Analyzing Water Bodies...' : 'Analyze Water Bodies' }}
+              🔥 {{ isAnalyzingFires ? 'Analyzing Burned Areas...' : 'Detect Forest Fires' }}
             </VBtn>
 
-            <!-- Water Results -->
-            <div v-if="waterResults" class="analysis-results">
+            <!-- Fire Results -->
+            <div v-if="fireResults" class="analysis-results">
               <VDivider class="mb-3" />
               
               <div class="results-header mb-3">
                 <div class="d-flex align-center justify-space-between">
-                  <h4 class="text-h6">Water Bodies Results</h4>
+                  <h4 class="text-h6">Fire Analysis Results</h4>
                   <VChip 
-                    :color="waterResults.waterData.features.length > 0 ? 'blue' : 'grey'"
+                    :color="fireResults.burnedAreaData.features.length > 0 ? 'error' : 'success'"
                     size="small"
                   >
-                    {{ waterResults.waterData.features.length > 0 ? 'Water Detected' : 'No Water' }}
+                    {{ fireResults.burnedAreaData.features.length > 0 ? 'Fire Detected' : 'No Fire' }}
                   </VChip>
                 </div>
               </div>
 
               <div class="results-details">
                 <div class="info-item">
-                  <span class="info-label">Water Bodies:</span>
-                  <span class="info-value">{{ waterResults.waterData.features.length }} polygons</span>
-                </div>
-                <div class="info-item">
-                  <span class="info-label">Index:</span>
-                  <span class="info-value">{{ waterResults.metadata.index }}</span>
-                </div>
-                <div class="info-item">
-                  <span class="info-label">Sensor:</span>
-                  <span class="info-value">{{ waterResults.metadata.sensor }}</span>
-                </div>
-              </div>
-
-              <div v-if="waterResults.waterData.features.length > 0" class="water-areas-details mt-3">
-                <VAlert type="info" variant="tonal" density="compact">
-                  <template #text>
-                    💧 {{ waterResults.waterData.features.length }} water bod{{ waterResults.waterData.features.length > 1 ? 'ies' : 'y' }} 
-                    detected in {{ areaDetails?.name }}.
-                  </template>
-                </VAlert>
-              </div>
-              
-              <div v-else class="no-water-message mt-3">
-                <VAlert type="info" variant="tonal" density="compact">
-                  <template #text>
-                    {{ waterResults.metadata.note || `No water bodies detected in ${areaDetails?.name} during the analysis period.` }}
-                  </template>
-                </VAlert>
-              </div>
-            </div>
-          </div>
-        </VCardText>
-      </VCard>
-
-      <!-- Dumpsite Detection -->
-      <VCard variant="outlined" class="mb-4">
-        <VCardTitle class="text-subtitle-1 pb-2">
-          🗑️ Dumpsite Detection
-        </VCardTitle>
-        <VCardText>
-          <div class="analysis-section">
-            <div class="analysis-period-info mb-2">
-              <VChip size="small" color="grey" variant="outlined">
-                Period: {{ analysisStartDate }} → {{ analysisEndDate }}
-              </VChip>
-            </div>
-            
-            <VBtn
-              :loading="isAnalyzingDumpsite"
-              :disabled="isAnalyzingDumpsite"
-              color="brown"
-              variant="flat"
-              block
-              class="mb-3"
-              @click="handleDumpsiteAnalysis"
-            >
-              🗑️ {{ isAnalyzingDumpsite ? 'Detecting Dumpsites...' : 'Detect Dumpsites' }}
-            </VBtn>
-
-            <!-- Dumpsite Results -->
-            <div v-if="dumpsiteResults" class="analysis-results">
-              <VDivider class="mb-3" />
-              
-              <div class="results-header mb-3">
-                <div class="d-flex align-center justify-space-between">
-                  <h4 class="text-h6">Dumpsite Detection Results</h4>
-                  <VChip 
-                    :color="dumpsiteResults.dumpsiteData.features.length > 0 ? 'brown' : 'success'"
-                    size="small"
-                  >
-                    {{ dumpsiteResults.dumpsiteData.features.length > 0 ? 'Potential Dumpsites' : 'No Dumpsites' }}
-                  </VChip>
-                </div>
-              </div>
-
-              <div class="results-details">
-                <div class="info-item">
-                  <span class="info-label">Potential Dumpsites:</span>
-                  <span class="info-value">{{ dumpsiteResults.dumpsiteData.features.length }} polygons</span>
+                  <span class="info-label">Burned Areas:</span>
+                  <span class="info-value">{{ fireResults.burnedAreaData.features.length }} polygons</span>
                 </div>
                 <div class="info-item">
                   <span class="info-label">Method:</span>
-                  <span class="info-value">{{ dumpsiteResults.metadata.method }}</span>
+                  <span class="info-value">{{ fireResults.metadata.method }}</span>
                 </div>
                 <div class="info-item">
-                  <span class="info-label">Sensor:</span>
-                  <span class="info-value">{{ dumpsiteResults.metadata.sensor }}</span>
+                  <span class="info-label">Datasets:</span>
+                  <span class="info-value">{{ fireResults.metadata.datasets.join(', ') }}</span>
+                </div>
+                <div v-if="fireResults.metadata.threshold" class="info-item">
+                  <span class="info-label">Threshold:</span>
+                  <span class="info-value">{{ fireResults.metadata.threshold }}</span>
+                </div>
+                <div v-if="fireResults.metadata.imageCount" class="info-item">
+                  <span class="info-label">Images Used:</span>
+                  <span class="info-value">{{ fireResults.metadata.imageCount }}</span>
                 </div>
               </div>
 
-              <div v-if="dumpsiteResults.dumpsiteData.features.length > 0" class="dumpsite-areas-details mt-3">
-                <VAlert type="warning" variant="tonal" density="compact">
+              <div v-if="fireResults.burnedAreaData.features.length > 0" class="fire-areas-details mt-3">
+                <VAlert type="error" variant="tonal" density="compact">
                   <template #text>
-                    🗑️ {{ dumpsiteResults.dumpsiteData.features.length }} potential dumpsite{{ dumpsiteResults.dumpsiteData.features.length > 1 ? 's' : '' }} 
+                    🔥 {{ fireResults.burnedAreaData.features.length }} burned area{{ fireResults.burnedAreaData.features.length > 1 ? 's' : '' }} 
                     detected in {{ areaDetails?.name }}.
                   </template>
                 </VAlert>
               </div>
               
-              <div v-else class="no-dumpsite-message mt-3">
+              <div v-else class="no-fire-message mt-3">
                 <VAlert type="success" variant="tonal" density="compact">
                   <template #text>
-                    {{ dumpsiteResults.metadata.note || `No potential dumpsites detected in ${areaDetails?.name} during the analysis period.` }}
+                    {{ fireResults.metadata.note || `No burned areas detected in ${areaDetails?.name} during the analysis period.` }}
                   </template>
                 </VAlert>
               </div>
@@ -906,5 +821,35 @@ const handleDumpsiteAnalysis = async () => {
 
 .analysis-section {
   width: 100%;
+}
+
+/* Logging Areas Details */
+.logging-areas-details {
+  background-color: #fff3cd;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid #ffeaa7;
+}
+
+.no-logging-message {
+  background-color: #d1eddd;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid #badbcc;
+}
+
+/* Fire Areas Details */
+.fire-areas-details {
+  background-color: #f8d7da;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid #f5c6cb;
+}
+
+.no-fire-message {
+  background-color: #d1eddd;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid #badbcc;
 }
 </style>
