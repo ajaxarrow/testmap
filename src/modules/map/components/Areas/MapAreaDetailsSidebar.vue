@@ -228,7 +228,6 @@ const generateRandomPointInArea = (): [number, number] => {
 }
 
 const fetchFloodedAreas = async () => {
-    clearAllResults()
     setIsAreaSelected(true);
   try {
     isLoadingFloodedAreas.value = true
@@ -273,7 +272,6 @@ const fetchFloodedAreas = async () => {
 }
 
 const fetchDiseaseAreas = async () => {
-    clearAllResults()
   setIsAreaSelected(true);
   try {
     isLoadingDiseaseAreas.value = true
@@ -961,7 +959,6 @@ const generateAIAnalysis = async () => {
 const handleFloodAnalysis = async () => {
     
   if (!selectedArea.value) return
-  clearDummyDataLayers()
   // Clear previous error
   errorMessage.value = null
   
@@ -979,7 +976,6 @@ const handleFloodAnalysis = async () => {
 
 const handleForestAnalysis = async () => {
   if (!selectedArea.value) return
-  clearDummyDataLayers()
   errorMessage.value = null
   
   try {
@@ -996,7 +992,6 @@ const handleForestAnalysis = async () => {
 
 const handleIllegalLoggingAnalysis = async () => {
   if (!selectedArea.value) return
-  clearDummyDataLayers()
   errorMessage.value = null
   
   try {
@@ -1013,7 +1008,6 @@ const handleIllegalLoggingAnalysis = async () => {
 
 const handleForestFireAnalysis = async () => {
   if (!selectedArea.value) return
-  clearDummyDataLayers()
   errorMessage.value = null
   
   try {
