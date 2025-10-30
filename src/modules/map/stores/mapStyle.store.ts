@@ -1,9 +1,5 @@
 import { ref } from 'vue'
 import { createGlobalState } from '@vueuse/core'
-import { useMapStore } from './map.store'
-import { useMapAreasStore } from './mapAreas.store'
-import type { AreaData } from "../interfaces";
-import barangaysData from '@/data/barangays_data.json'
 export interface MapStyle {
   key: string
   name: string
@@ -14,8 +10,6 @@ export interface MapStyle {
 }
 
 export const useMapStyleStore = createGlobalState(() => {
-  const { map } = useMapStore()
-  const {setupAreas} = useMapAreasStore();
   
   // Available map styles
   const availableStyles: MapStyle[] = [

@@ -8,11 +8,10 @@ import { useMapStore } from "../stores/map.store";
 import { useMapAreasStore } from "../stores/mapAreas.store";
 import { useMapStyleStore } from "../stores/mapStyle.store";
 import type { AreaData } from "../interfaces";
-import municipitiesData from '@/data/municities_data.json'
 import barangaysData from '@/data/barangays_data.json'
 const mapContainer = shallowRef<HTMLDivElement | null>(null);
 
- // Malaybalay City center
+// Malaybalay City center coordinates
 const loading = ref(false);
 const bounds: [number, number, number, number] = [
   124.2, 7.3,   // Southwest corner of Bukidnon
@@ -31,13 +30,13 @@ const initMap = async () => {
         new Map({
           container: mapContainer.value,
           style: getStyleUrl(currentStyle.value), // Use current style
-          center: lnglat,
-          zoom: 7.5,
+          center: lnglat, // Malaybalay City center
+          zoom: 10, // Increased zoom to focus on Malaybalay area
           maxBounds: bounds
         })
     );
     
-    console.log(`🗺️ Map initialized with ${currentStyle.value} style`);
+    console.log(`🗺️ Map initialized with ${currentStyle.value} style, focused on Malaybalay`);
   } else {
     console.error("Map container not found.");
   }
@@ -72,6 +71,13 @@ watch(currentStyle, (newStyle) => {
 onMounted( async() => {
     loading.value = true;
     await initMap();
+
+    // @ts-ignore
+    map.value.addControl(draw);
+    ['draw.create', 'draw.update', 'draw.delete'].forEach((eventName) => {
+      //@ts-ignore
+      map.value.on(eventName, handleDrawEvent);
+    });
     // @ts-ignore
     map.value?.on('style.load', () => {
         // setupAreas(municipitiesData as AreaData[]);

@@ -7,11 +7,11 @@
 
 body{
     scroll-behavior: smooth;
-    /*background-color: #F0F5F9 !important;*/
+    /*background-color: #F1F8E9 !important;*/
 }
 
 .bg-main{
-    background-color: #F0F5F9 !important;
+    background-color: #F1F8E9 !important;
 }
 
 .center{
@@ -29,7 +29,7 @@ body{
   width: 116px;
   height: 107px;
   border-radius: 50%;
-  background: #DEF1FB;
+  background: #C8E6C9;
   z-index: 1;
   opacity: 75%;
 }

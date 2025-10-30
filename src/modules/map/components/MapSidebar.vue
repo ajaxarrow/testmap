@@ -31,7 +31,7 @@ const activeNav = ref('');
 
 const sidebarStyle = computed(() => {
   if (showAdditionalContent.value) {
-    return { width: '425px !important' }
+    return { width: '350px !important' }
   } else {
     return { width: '85px !important' }
   }
@@ -39,23 +39,23 @@ const sidebarStyle = computed(() => {
 
 const navLinks = [
   {
-    name: 'Areas',
+    name: 'Barangays',
     icon: markRaw(PhMapPin),
     header: markRaw(MapAreasHeader),
     mainContent: markRaw(MapAreasMainContent)
   },
-  {
-    name: 'Layers',
-    icon: markRaw(PhMapPin),
-    header: markRaw(MapLayersHeader),
-    mainContent: markRaw(MapLayersMainContent)
-  },
-  {
-    name: 'Monitoring',
-    icon: markRaw(PhChartLine),
-    header: markRaw(MapMonitoringHeader),
-    mainContent: markRaw(MapMonitoringMainContent)
-  },
+//   {
+//     name: 'Layers',
+//     icon: markRaw(PhMapPin),
+//     header: markRaw(MapLayersHeader),
+//     mainContent: markRaw(MapLayersMainContent)
+//   },
+//   {
+//     name: 'Monitoring',
+//     icon: markRaw(PhChartLine),
+//     header: markRaw(MapMonitoringHeader),
+//     mainContent: markRaw(MapMonitoringMainContent)
+//   },
   {
     name: 'Reports',
     icon: markRaw(PhFileText),
@@ -241,7 +241,7 @@ const handleAddItem = () => {
 
 .sidebar-additional-content {
   height: 95vh;
-  width: 350px !important;
+  width: 275px !important;
 }
 
 .sidebar-header {
@@ -256,8 +256,15 @@ const handleAddItem = () => {
 }
 
 .active-nav {
-  background-color: #F0F5F9;
-  border-right: 3px solid #3291C7;
+  background-color: #f0f9f3;
+  border-right: 3px solid #388E3C;
+}
+
+.navigation-item{
+    transition: all 0.2s ease;
+}
+.navigation-item:hover {
+  background-color: #f0f9f3;
 }
 
 .bottom-nav {
@@ -266,8 +273,8 @@ const handleAddItem = () => {
 }
 
 .v-list-item--active {
-  background-color: #F0F5F9 !important;
-  border-right: 3px solid #3291C7;
+  background-color: #f0f9f3 !important;
+  border-right: 3px solid #388E3C;
 }
 
 :deep(.v-list-item--density-default:not(.v-list-item--nav).v-list-item--one-line) {

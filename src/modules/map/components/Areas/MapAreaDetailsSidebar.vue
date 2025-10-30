@@ -25,8 +25,31 @@ const {
 } = useSatelliteFloodStore()
 
 // Analysis date range - using more recent dates for better data availability
-const analysisStartDate = ref('2024-01-01')
-const analysisEndDate = ref('2024-03-31')
+const getYesterday = () => {
+  const yesterday = new Date()
+  yesterday.setDate(yesterday.getDate() - 1)
+  return yesterday.toISOString().split('T')[0]!
+}
+
+const getToday = () => {
+  return new Date().toISOString().split('T')[0]!
+}
+
+const analysisStartDate = ref<string>(getYesterday()) // Yesterday
+const analysisEndDate = ref<string>(getToday()) // Today
+
+// Get today's date in YYYY-MM-DD format for date input max attribute
+const todayDate = new Date().toISOString().split('T')[0]
+
+// Format date for display
+const formatDateForDisplay = (dateString: string) => {
+  const date = new Date(dateString)
+  return date.toLocaleDateString('en-US', { 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric' 
+  })
+}
 
 const areaDetails = computed(() => {
   if (!selectedArea.value) return null
@@ -220,7 +243,7 @@ const handleForestFireAnalysis = async () => {
           <div class="date-range-selection">
             <p class="text-subtitle-2 mb-2">Satellite Data Period</p>
             <VRow class="ma-0">
-              <VCol cols="6" class="pa-1">
+              <VCol cols="12" class="pa-1">
                 <VTextField
                   v-model="analysisStartDate"
                   type="date"
@@ -228,9 +251,10 @@ const handleForestFireAnalysis = async () => {
                   variant="outlined"
                   density="compact"
                   hide-details
+                  :max="todayDate"
                 />
               </VCol>
-              <VCol cols="6" class="pa-1">
+              <VCol cols="12" class="pa-1">
                 <VTextField
                   v-model="analysisEndDate"
                   type="date"
@@ -238,6 +262,7 @@ const handleForestFireAnalysis = async () => {
                   variant="outlined"
                   density="compact"
                   hide-details
+                  :max="todayDate"
                 />
               </VCol>
             </VRow>
@@ -265,7 +290,7 @@ const handleForestFireAnalysis = async () => {
           <div class="flood-analysis-section">
             <div class="analysis-period-info mb-2">
               <VChip size="small" color="grey" variant="outlined">
-                Period: {{ analysisStartDate }} → {{ analysisEndDate }}
+                Period: {{ formatDateForDisplay(analysisStartDate) }} → {{ formatDateForDisplay(analysisEndDate) }}
               </VChip>
             </div>
             <!-- Analysis Button -->
@@ -403,7 +428,7 @@ const handleForestFireAnalysis = async () => {
           <div class="analysis-section">
             <div class="analysis-period-info mb-2">
               <VChip size="small" color="grey" variant="outlined">
-                Period: {{ analysisStartDate }} → {{ analysisEndDate }}
+                Period: {{ formatDateForDisplay(analysisStartDate) }} → {{ formatDateForDisplay(analysisEndDate) }}
               </VChip>
             </div>
             
@@ -480,7 +505,7 @@ const handleForestFireAnalysis = async () => {
           <div class="analysis-section">
             <div class="analysis-period-info mb-2">
               <VChip size="small" color="grey" variant="outlined">
-                Period: {{ analysisStartDate }} → {{ analysisEndDate }}
+                Period: {{ formatDateForDisplay(analysisStartDate) }} → {{ formatDateForDisplay(analysisEndDate) }}
               </VChip>
             </div>
             
@@ -561,7 +586,7 @@ const handleForestFireAnalysis = async () => {
           <div class="analysis-section">
             <div class="analysis-period-info mb-2">
               <VChip size="small" color="grey" variant="outlined">
-                Period: {{ analysisStartDate }} → {{ analysisEndDate }}
+                Period: {{ formatDateForDisplay(analysisStartDate) }} → {{ formatDateForDisplay(analysisEndDate) }}
               </VChip>
             </div>
             

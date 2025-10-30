@@ -104,7 +104,7 @@ onMounted(() => {
 
 .barangay-item:hover {
   background-color: #f8f9fa;
-  border-color: #1976d2;
+  border-color: #388E3C;
   box-shadow: 0 2px 8px rgba(25, 118, 210, 0.1);
   transform: translateY(-1px);
 }

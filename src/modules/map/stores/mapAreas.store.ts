@@ -29,7 +29,7 @@ export const useMapAreasStore = createGlobalState(() => {
   }
 
   const getColorArea = (areaType: string) => {
-    return areaType == 'Barangay' ? '#00ACC1' : '#0027c1';
+    return areaType == 'Barangay' ? '#00c12aff' : '#44c100ff';
   }
 
   const clickArea = (area: AreaData) => {
@@ -63,7 +63,7 @@ export const useMapAreasStore = createGlobalState(() => {
         if (map.value?.getLayer(currentLineLayerId)) {
             map.value?.setPaintProperty(currentLineLayerId, 'line-opacity', .8);
             map.value?.setPaintProperty(currentLineLayerId, 'line-color', getColorArea(area.type));
-            map.value?.setPaintProperty(currentLineLayerId, 'line-width', 2);
+            map.value?.setPaintProperty(currentLineLayerId, 'line-width', 4);
         } else {
             console.warn(`⚠️ Line layer ${currentLineLayerId} not found, cannot style selected area`);
         }
@@ -128,7 +128,7 @@ const setupAreas = (areas: AreaData[]) => {
                 map.value?.on('mouseover', `id-${area.id}`, (e) => {
                     if (area.id !== selectedArea.value?.id) {
                         map.value?.setPaintProperty(`id-${area.id}`, 'fill-opacity', .5);
-                        map.value?.setPaintProperty(`id-${area.id}`, 'fill-color', '#00ACC1');
+                        map.value?.setPaintProperty(`id-${area.id}`, 'fill-color', '#3dc100ff');
                     } else {
                         // If this is the selected area, clear the fill to show only outline
                         map.value?.setPaintProperty(`id-${area.id}`, 'fill-opacity', 0);

@@ -56,7 +56,7 @@ const getStyleIcon = (styleKey: string) => {
                 :is="getStyleIcon(style.key)" 
                 size="24" 
                 class="mr-2"
-                :color="selectedStyle === style.key ? '#1976d2' : '#666'"
+                :color="selectedStyle === style.key ? '#388E3C' : '#666'"
               />
               <h4 class="style-name">{{ style.name }}</h4>
             </div>
@@ -66,7 +66,7 @@ const getStyleIcon = (styleKey: string) => {
             <div class="provider-info mt-2">
               <VChip
                 size="x-small"
-                :color="style.provider === 'MapTiler' ? 'blue' : style.provider === 'Mapbox' ? 'green' : 'purple'"
+                color="green"
                 variant="tonal"
               >
                 {{ style.provider }}
@@ -108,7 +108,7 @@ const getStyleIcon = (styleKey: string) => {
         <div class="mt-2">
           <VChip
             size="small"
-            :color="currentStyleInfo?.provider === 'MapTiler' ? 'blue' : 'green'"
+            color="green"
             variant="tonal"
           >
             {{ currentStyleInfo?.provider }}
@@ -154,8 +154,8 @@ const getStyleIcon = (styleKey: string) => {
 }
 
 .style-selected {
-  border-color: #1976d2 !important;
-  background-color: #f3f8ff;
+  border-color: #388E3C !important;
+  background-color: #f3fff4;
 }
 
 .style-name {
@@ -192,7 +192,7 @@ const getStyleIcon = (styleKey: string) => {
   padding: 12px;
   background-color: #f8f9fa;
   border-radius: 8px;
-  border-left: 4px solid #1976d2;
+  border-left: 4px solid #388E3C;
 }
 
 .source-item h5 {

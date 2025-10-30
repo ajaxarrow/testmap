@@ -18,11 +18,11 @@ const vuetify = createVuetify({
     },
     defaults: {
         VBtnPrimaryFilled: {
-            color: 'bs50',
+            color: 'primary',
             class: 'text-none satoshi-md btn-spacing'
         },
         VBtnPrimary: {
-            color: 'bs50',
+            color: 'primary',
             rounded: true,
             height: "44",
             class: 'text-none satoshi-md mx-2',
@@ -35,7 +35,7 @@ const vuetify = createVuetify({
             width: '130'
         },
         VBtnPrimaryAlt: {
-            color: 'bs50',
+            color: 'secondary',
             height: "44",
             class: 'text-none satoshi-md mx-1',
         },
@@ -54,25 +54,49 @@ const vuetify = createVuetify({
             light: {
                 dark: false,
                 colors: {
-                    primary: '#3291C7',
-                    secondary: '#32C8B4',
-                    warning: '#C83246',
-                    border: '#E5ECF6',
-                    background: '#F0F5F9',
-                    gs10: '#191919',
-                    gs20: '#5F6061',
-                    gs30: '#5E5E5E',
-                    gs40: '#8C8C8C',
-                    gs50: '#BABABA',
-                    gs60: '#191919',
-                    gs70: '#E4E4E4',
-                    gs80: '#EEEEEE',
-                    gs90: '#fafafa',
-                    sb10: '#F8FDFF',
-                    sb20: '#EBF4F9',
-                    bs10: '#050E14',
-                    bs20: '#0A1D28',
-                    bs50: '#23668B'
+                    // Environmental Green Palette for CENRO
+                    primary: '#2E7D32',        // Forest Green - main actions
+                    secondary: '#4CAF50',      // Bright Green - secondary actions
+                    tertiary: '#66BB6A',       // Light Green - accents
+                    accent: '#81C784',         // Mint Green - highlights
+                    success: '#4CAF50',        // Green success
+                    warning: '#FF8F00',        // Amber warning
+                    error: '#D32F2F',          // Red error
+                    info: '#2E7D32',           // Use primary green for info
+                    
+                    // Nature-inspired background colors
+                    background: '#F1F8E9',     // Very light green background
+                    surface: '#FFFFFF',        // White surface
+                    border: '#C8E6C9',         // Light green border
+                    
+                    // Gray scale with green undertones
+                    gs10: '#1B5E20',           // Dark forest green
+                    gs20: '#2E7D32',           // Primary green
+                    gs30: '#388E3C',           // Medium green
+                    gs40: '#4CAF50',           // Secondary green
+                    gs50: '#66BB6A',           // Light green
+                    gs60: '#81C784',           // Lighter green
+                    gs70: '#A5D6A7',           // Very light green
+                    gs80: '#C8E6C9',           // Pale green
+                    gs90: '#E8F5E8',           // Almost white green
+                    
+                    // Environmental surface colors
+                    sb10: '#F1F8E9',           // Light green tint
+                    sb20: '#E8F5E8',           // Very light green
+                    
+                    // Nature dark colors (for contrast)
+                    bs10: '#0D2818',           // Very dark forest
+                    bs20: '#1B5E20',           // Dark forest
+                    bs50: '#2E7D32',           // Primary forest green
+                    
+                    // Environmental specific colors
+                    forest: '#1B5E20',         // Deep forest
+                    leaf: '#4CAF50',           // Fresh leaf green
+                    sage: '#689F38',           // Sage green
+                    moss: '#558B2F',           // Moss green
+                    earth: '#5D4037',          // Earth brown
+                    water: '#0277BD',          // Water blue
+                    sky: '#81C784'             // Light sky green
                 }
             }
         }
