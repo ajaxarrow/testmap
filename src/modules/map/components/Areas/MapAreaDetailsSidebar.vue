@@ -6,7 +6,7 @@ import { useSatelliteFloodStore } from '../../stores/satelliteFlood.store.ts'
 import { useMapStore } from '../../stores/map.store'
 import { Popup } from 'maplibre-gl'
 
-const { selectedArea, showAreaDetails, clearSelectedArea } = useMapAreasStore()
+const { selectedArea, showAreaDetails, clearSelectedArea, isAreaSelected, setIsAreaSelected } = useMapAreasStore()
 const { 
   runFloodAnalysis, 
   runForestAnalysis,
@@ -42,6 +42,9 @@ const getToday = () => {
 const analysisStartDate = ref<string>(getYesterday()) // Yesterday
 const analysisEndDate = ref<string>(getToday()) // Today
 
+// UI: active tab for area details (tab-1: general / tab-2: flood & forest / tab-3: health & disaster)
+const tab = ref<string>('tab-1')
+
 // Get today's date in YYYY-MM-DD format for date input max attribute
 const todayDate = new Date().toISOString().split('T')[0]
 
@@ -75,6 +78,13 @@ const handleClose = () => {
   clearAllResults()
   clearDummyDataLayers()
 }
+
+watch(selectedArea, (newArea) => {
+  if (newArea) {
+    clearAllResults()
+    clearDummyDataLayers()
+  }
+})
 
 const clearDummyDataLayers = () => {
   if (!map.value) return
@@ -110,49 +120,116 @@ const isLoadingFloodedAreas = ref(false)
 const isLoadingDiseaseAreas = ref(false)
 const analysisPrompt = ref<string>('')
 
-// Helper function to generate random point within selected area bounds
-const generateRandomPointInArea = () => {
+// Helper: point-in-polygon (ray-casting) for an outer ring
+const isPointInRing = (point: [number, number], ring: number[][]): boolean => {
+  if (!ring || ring.length === 0) return false
+
+  const x = point[0]
+  const y = point[1]
+  let inside = false
+
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const ri = ring[i]!
+    const rj = ring[j]!
+    if (!ri || !rj || ri.length < 2 || rj.length < 2) continue
+
+    const xi = ri[0]!
+    const yi = ri[1]!
+    const xj = rj[0]!
+    const yj = rj[1]!
+
+    const intersect = ((yi > y) !== (yj > y)) &&
+      (x < (xj - xi) * (y - yi) / ((yj - yi) || Number.EPSILON) + xi)
+
+    if (intersect) inside = !inside
+  }
+
+  return inside
+}
+
+// Helper function to generate random point within selected area bounds and ensure it lies inside
+const generateRandomPointInArea = (): [number, number] => {
+  // If no selected geometry, fallback to a general Philippines-ish area
   if (!selectedArea.value?.geojson?.geometry) {
-    // Fallback to general Philippines area if no specific area selected
-    return [
-      124.5 + Math.random() * 0.8, // Bukidnon longitude range
-      7.5 + Math.random() * 0.8    // Bukidnon latitude range
-    ]
+    return [124.5 + Math.random() * 0.8, 7.5 + Math.random() * 0.8]
   }
 
   const geometry = selectedArea.value.geojson.geometry
-  
+
+  // Support Polygon and MultiPolygon by testing points against the outer ring(s)
   if (geometry.type === 'Polygon') {
-    const coordinates = geometry.coordinates[0] // Get outer ring
-    
-    // Find bounding box of the polygon
-    let minLng = coordinates[0][0]
-    let maxLng = coordinates[0][0]
-    let minLat = coordinates[0][1]
-    let maxLat = coordinates[0][1]
-    
-    coordinates.forEach((coord: number[]) => {
-      minLng = Math.min(minLng, coord[0])
-      maxLng = Math.max(maxLng, coord[0])
-      minLat = Math.min(minLat, coord[1])
-      maxLat = Math.max(maxLat, coord[1])
+    const outerRing: number[][] | undefined = geometry.coordinates?.[0]
+    if (!outerRing || outerRing.length === 0) return [124.5 + Math.random() * 0.8, 7.5 + Math.random() * 0.8]
+
+    // Bounding box of outer ring
+    let minLng = outerRing[0]![0]!
+    let maxLng = outerRing[0]![0]!
+    let minLat = outerRing[0]![1]!
+    let maxLat = outerRing[0]![1]!
+
+    outerRing.forEach((coord: number[] | undefined) => {
+      if (!coord || coord.length < 2) return
+      minLng = Math.min(minLng, coord[0]!)
+      maxLng = Math.max(maxLng, coord[0]!)
+      minLat = Math.min(minLat, coord[1]!)
+      maxLat = Math.max(maxLat, coord[1]!)
     })
-    
-    // Generate random point within bounding box
-    const lng = minLng + Math.random() * (maxLng - minLng)
-    const lat = minLat + Math.random() * (maxLat - minLat)
-    
-    return [lng, lat]
+
+    // Try multiple times to find a point inside the polygon
+    const maxAttempts = 200
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const lng = minLng + Math.random() * (maxLng - minLng)
+      const lat = minLat + Math.random() * (maxLat - minLat)
+      const pt: [number, number] = [lng, lat]
+
+      if (isPointInRing(pt, outerRing)) return pt
+    }
+
+    // Fallback to center of bbox if nothing found
+    return [(minLng + maxLng) / 2, (minLat + maxLat) / 2]
   }
-  
-  // Fallback if geometry type is not handled
-  return [
-    124.5 + Math.random() * 0.8,
-    7.5 + Math.random() * 0.8
-  ]
+
+  if (geometry.type === 'MultiPolygon') {
+    // Pick a polygon at random and test its outer ring
+    const polygons: number[][][][] | undefined = geometry.coordinates as any
+    if (!polygons || polygons.length === 0) return [124.5 + Math.random() * 0.8, 7.5 + Math.random() * 0.8]
+
+    const poly = polygons[Math.floor(Math.random() * polygons.length)]
+    const outerRing: number[][] | undefined = poly?.[0]
+    if (!outerRing || outerRing.length === 0) return [124.5 + Math.random() * 0.8, 7.5 + Math.random() * 0.8]
+
+    let minLng = outerRing[0]![0]!
+    let maxLng = outerRing[0]![0]!
+    let minLat = outerRing[0]![1]!
+    let maxLat = outerRing[0]![1]!
+
+    outerRing.forEach((coord: number[] | undefined) => {
+      if (!coord || coord.length < 2) return
+      minLng = Math.min(minLng, coord[0]!)
+      maxLng = Math.max(maxLng, coord[0]!)
+      minLat = Math.min(minLat, coord[1]!)
+      maxLat = Math.max(maxLat, coord[1]!)
+    })
+
+    const maxAttempts = 200
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const lng = minLng + Math.random() * (maxLng - minLng)
+      const lat = minLat + Math.random() * (maxLat - minLat)
+      const pt: [number, number] = [lng, lat]
+
+      if (isPointInRing(pt, outerRing)) return pt
+    }
+
+    return [(minLng + maxLng) / 2, (minLat + maxLat) / 2]
+  }
+
+  // Fallback: return a random point in a general region
+  return [124.5 + Math.random() * 0.8, 7.5 + Math.random() * 0.8]
 }
 
 const fetchFloodedAreas = async () => {
+    clearAllResults()
+    setIsAreaSelected(true);
   try {
     isLoadingFloodedAreas.value = true
     
@@ -196,6 +273,8 @@ const fetchFloodedAreas = async () => {
 }
 
 const fetchDiseaseAreas = async () => {
+    clearAllResults()
+  setIsAreaSelected(true);
   try {
     isLoadingDiseaseAreas.value = true
     
@@ -328,23 +407,35 @@ const addFloodDotsToMap = (floodData: any[]) => {
       type: 'circle',
       source: 'flood-data',
       paint: {
+        // Use smaller radii for point visualization so dots don't overwhelm the map.
+        // Radius is modest and optionally scales slightly with water level for a subtle choropleth effect.
+        // Single light blue color ramp; intensity and size vary with waterLevel
         'circle-radius': [
-          'case',
-          ['==', ['get', 'severity'], 'Critical'], 25,  // Smaller dots
-          ['==', ['get', 'severity'], 'High'], 20,
-          ['==', ['get', 'severity'], 'Moderate'], 16,
-          12  // Minimum size for visibility
+          'interpolate',
+          ['linear'],
+          ['coalesce', ['get', 'waterLevel'], 0],
+          0, 4,
+          0.5, 6,
+          1.0, 8,
+          2.0, 10,
+          3.0, 14
         ],
+
+        // Light blue → deeper blue by water level (transparent/light look)
         'circle-color': [
-          'case',
-          ['==', ['get', 'severity'], 'Critical'], '#8B0000',    // Dark red
-          ['==', ['get', 'severity'], 'High'], '#DC143C',         // Crimson
-          ['==', ['get', 'severity'], 'Moderate'], '#FF6347',     // Tomato
-          '#4169E1'  // Royal blue for low severity
+          'interpolate',
+          ['linear'],
+          ['coalesce', ['get', 'waterLevel'], 0],
+          0, 'rgba(96,165,250,0.35)',    // blue-400 light
+          1.5, 'rgba(59,130,246,0.55)',  // blue-500 medium
+          3, 'rgba(29,78,216,0.75)'      // blue-700 darker
         ],
-        'circle-opacity': 0.9,  // More opaque
-        'circle-stroke-width': 3,  // Thicker border
-        'circle-stroke-color': '#ffffff'
+
+        // Softer, light transparency so points blend into the map
+        'circle-opacity': 1,
+        'circle-stroke-width': 0.6,
+        'circle-stroke-color': 'rgba(255,255,255,0.6)',
+        'circle-blur': 0.12
       }
     })
 
@@ -444,32 +535,33 @@ const addDiseaseChloroplethToMap = (diseaseData: any[]) => {
       type: 'circle',
       source: 'disease-data',
       paint: {
+        // Single light coral color ramp; intensity and size vary with totalCases
         'circle-radius': [
           'interpolate',
           ['linear'],
-          ['get', 'totalCases'],
-          10, 18,  // 10 cases = 18px radius (smaller)
-          50, 24,  // 50 cases = 24px radius
-          100, 30, // 100 cases = 30px radius
-          200, 38  // 200+ cases = 38px radius
+          ['coalesce', ['get', 'totalCases'], 0],
+          0, 4,
+          10, 6,
+          50, 10,
+          100, 14,
+          200, 20
         ],
+
+        // Light coral → deeper coral by totalCases (transparent/light look)
         'circle-color': [
-          'case',
-          ['==', ['get', 'riskLevel'], 'High'], '#FF1493',       // Deep pink
-          ['>', ['get', 'totalCases'], 50], '#FF8C00',           // Dark orange
-          ['any', 
-            ['in', 'Malaria', ['get', 'primaryDisease']], 
-            ['in', 'malaria', ['get', 'primaryDisease']]
-          ], '#9370DB',                                          // Medium purple
-          ['any', 
-            ['in', 'Leptospirosis', ['get', 'primaryDisease']], 
-            ['in', 'leptospirosis', ['get', 'primaryDisease']]
-          ], '#00CED1',                                          // Dark turquoise
-          '#32CD32'                                              // Lime green for low risk
+          'interpolate',
+          ['linear'],
+          ['coalesce', ['get', 'totalCases'], 0],
+          0, 'rgba(252,165,165,0.32)',  // red-200 light
+          50, 'rgba(248,113,113,0.52)', // red-300 medium
+          150, 'rgba(244,63,94,0.74)'   // rose-500 stronger
         ],
-        'circle-opacity': 0.7,  // More visible
-        'circle-stroke-width': 2,  // Thicker border
-        'circle-stroke-color': '#ffffff'
+
+        // Softer, light transparency so points blend into the map
+        'circle-opacity': 1,
+        'circle-stroke-width': 0.6,
+        'circle-stroke-color': 'rgba(255,255,255,0.6)',
+        'circle-blur': 0.12
       }
     })
 
@@ -535,6 +627,82 @@ watch(diseaseAreasData, (newData) => {
     addDiseaseChloroplethToMap(newData.data)
   }
 })
+
+// --- CSV download helpers (pure JS) -------------------------------------------------
+const _escapeCSV = (val: any) => {
+  if (val === null || val === undefined) return ''
+  const s = String(val)
+  // If contains comma, quote, or newline, wrap in quotes and escape quotes
+  if (s.includes('"') || s.includes(',') || s.includes('\n')) {
+    return '"' + s.replace(/"/g, '""') + '"'
+  }
+  return s
+}
+
+const _arrayToCSV = (headers: string[], rows: Record<string, any>[]) => {
+  const headerLine = headers.join(',')
+  const lines = rows.map(row => headers.map(h => _escapeCSV(row[h])).join(','))
+  return [headerLine, ...lines].join('\r\n')
+}
+
+const _downloadBlob = (content: string, filename: string, mime = 'text/csv;charset=utf-8;') => {
+  const blob = new Blob([content], { type: mime })
+  const url = window.URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  window.URL.revokeObjectURL(url)
+}
+
+const downloadFloodedAreasCSV = () => {
+  if (!floodedAreasData.value || !Array.isArray(floodedAreasData.value.data)) return
+
+  const rows = floodedAreasData.value.data.map((f: any) => ({
+    id: f.id ?? '',
+    area: f.area ?? '',
+    longitude: f.coordinates ? (f.coordinates[0] ?? '') : '',
+    latitude: f.coordinates ? (f.coordinates[1] ?? '') : '',
+    severity: f.severity ?? '',
+    waterLevel: f.waterLevel ?? '',
+    affectedPopulation: f.affectedPopulation ?? '',
+    risk: f.risk ?? ''
+  }))
+
+  const headers = ['id', 'area', 'longitude', 'latitude', 'severity', 'waterLevel', 'affectedPopulation', 'risk']
+  const csv = _arrayToCSV(headers, rows)
+  const areaName = (areaDetails.value?.name || 'area').replace(/[^a-z0-9-_]/gi, '_')
+  const filename = `flooded_areas_${areaName}_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.csv`
+
+  console.log('Downloading flooded areas CSV:', filename)
+  _downloadBlob(csv, filename)
+}
+
+const downloadDiseaseAreasCSV = () => {
+  if (!diseaseAreasData.value || !Array.isArray(diseaseAreasData.value.data)) return
+
+  const rows = diseaseAreasData.value.data.map((d: any) => ({
+    id: d.id ?? '',
+    area: d.area ?? '',
+    longitude: d.coordinates ? (d.coordinates[0] ?? '') : '',
+    latitude: d.coordinates ? (d.coordinates[1] ?? '') : '',
+    riskLevel: d.riskLevel ?? '',
+    totalCases: d.totalCases ?? '',
+    affectedPopulation: d.affectedPopulation ?? '',
+    diseases: Array.isArray(d.diseases) ? d.diseases.map((x: any) => `${x.name || ''}(${x.cases ?? ''})`).join('; ') : ''
+  }))
+
+  const headers = ['id', 'area', 'longitude', 'latitude', 'riskLevel', 'totalCases', 'affectedPopulation', 'diseases']
+  const csv = _arrayToCSV(headers, rows)
+  const areaName = (areaDetails.value?.name || 'area').replace(/[^a-z0-9-_]/gi, '_')
+  const filename = `disease_areas_${areaName}_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.csv`
+
+  console.log('Downloading disease areas CSV:', filename)
+  _downloadBlob(csv, filename)
+}
+
 
 const generateAnalysisPrompt = () => {
   const floodData = floodedAreasData.value?.data || []
@@ -791,8 +959,9 @@ const generateAIAnalysis = async () => {
 }
 
 const handleFloodAnalysis = async () => {
+    
   if (!selectedArea.value) return
-  
+  clearDummyDataLayers()
   // Clear previous error
   errorMessage.value = null
   
@@ -810,7 +979,7 @@ const handleFloodAnalysis = async () => {
 
 const handleForestAnalysis = async () => {
   if (!selectedArea.value) return
-  
+  clearDummyDataLayers()
   errorMessage.value = null
   
   try {
@@ -827,7 +996,7 @@ const handleForestAnalysis = async () => {
 
 const handleIllegalLoggingAnalysis = async () => {
   if (!selectedArea.value) return
-  
+  clearDummyDataLayers()
   errorMessage.value = null
   
   try {
@@ -844,7 +1013,7 @@ const handleIllegalLoggingAnalysis = async () => {
 
 const handleForestFireAnalysis = async () => {
   if (!selectedArea.value) return
-  
+  clearDummyDataLayers()
   errorMessage.value = null
   
   try {
@@ -882,717 +1051,666 @@ const handleForestFireAnalysis = async () => {
 
     <!-- Content -->
     <div class="sidebar-content-wrapper pa-4" v-if="areaDetails">
-      <!-- Area Header -->
-      <div class="area-header mb-4">
-        <div class="d-flex align-center mb-2">
-          <PhBuildings 
-            v-if="areaDetails.type === 'Municipality'" 
-            size="32" 
-            class="mr-3 text-primary" 
-          />
-          <PhMapPin 
-            v-else 
-            size="32" 
-            class="mr-3 text-secondary" 
-          />
-          <div>
-            <h2 class="area-title">{{ areaDetails.name }}</h2>
-            <p class="area-type text-grey">{{ areaDetails.type }}</p>
-          </div>
-        </div>
-      </div>
+      <!-- Tabbed layout: General / Flood & Forest / Health & Disaster (v-tabs / v-tabs-window API) -->
+      <v-tabs v-model="tab" align-tabs="center" class="mb-4" stacked>
+        <v-tab value="tab-1">General Info</v-tab>
+        <v-tab value="tab-2">Flood & Forest Data</v-tab>
+        <v-tab value="tab-3">Health & Disaster Analysis</v-tab>
+      </v-tabs>
 
-      <!-- Area Information -->
-      <VCard variant="outlined" class="mb-4">
-        <VCardTitle class="text-subtitle-1 pb-2">
-          <PhInfo size="20" class="mr-2" />
-          Location Information
-        </VCardTitle>
-        <VCardText>
-          <div class="info-grid">
-            <div class="info-item">
-              <span class="info-label">Province:</span>
-              <span class="info-value">Bukidnon</span>
-            </div>
-            
-            <div v-if="areaDetails.municipality && areaDetails.type === 'Barangay'" class="info-item">
-              <span class="info-label">City:</span>
-              <span class="info-value">Malaybalay City</span>
-            </div>
-            
-            <div class="info-item">
-              <span class="info-label">Region:</span>
-              <span class="info-value">Region X</span>
-            </div>
-            
-            <div class="info-item">
-              <span class="info-label">Country:</span>
-              <span class="info-value">Philippines</span>
-            </div>
-          </div>
-        </VCardText>
-      </VCard>
-
-      <!-- Geographic Data -->
-      <VCard variant="outlined" class="mb-4">
-        <VCardTitle class="text-subtitle-1 pb-2">
-          Geographic Data
-        </VCardTitle>
-        <VCardText>
-          <div class="d-flex align-center justify-space-between">
-            <span class="text-body-2">Boundary Type:</span>
-            <VChip 
-              size="small" 
-              :color="selectedArea.geojson.geometry.type === 'Polygon' ? 'success' : 'info'"
-            >
-              {{ selectedArea.geojson.geometry.type }}
-            </VChip>
-          </div>
-        </VCardText>
-      </VCard>
-
-      <!-- Analysis Configuration -->
-      <VCard variant="outlined" class="mb-4">
-        <VCardTitle class="text-subtitle-1 pb-2">
-          📅 Analysis Period Configuration
-        </VCardTitle>
-        <VCardText>
-          <div class="date-range-selection">
-            <p class="text-subtitle-2 mb-2">Satellite Data Period</p>
-            <VRow class="ma-0">
-              <VCol cols="12" class="pa-1">
-                <VTextField
-                  v-model="analysisStartDate"
-                  type="date"
-                  label="Start Date"
-                  variant="outlined"
-                  density="compact"
-                  hide-details
-                  :max="todayDate"
-                />
-              </VCol>
-              <VCol cols="12" class="pa-1">
-                <VTextField
-                  v-model="analysisEndDate"
-                  type="date"
-                  label="End Date"
-                  variant="outlined"
-                  density="compact"
-                  hide-details
-                  :max="todayDate"
-                />
-              </VCol>
-            </VRow>
-            <VAlert
-              type="info"
-              variant="tonal"
-              density="compact"
-              class="mt-2"
-            >
-              <template #text>
-                This date range applies to all satellite analysis types below.
-              </template>
-            </VAlert>
-          </div>
-        </VCardText>
-      </VCard>
-
-      <!-- Satellite Flood Analysis -->
-      <VCard variant="outlined" class="mb-4">
-        <VCardTitle class="text-subtitle-1 pb-2">
-          <PhRadioButton size="20" class="mr-2" />
-          Satellite Flood Analysis
-        </VCardTitle>
-        <VCardText>
-          <div class="flood-analysis-section">
-            <div class="analysis-period-info mb-2">
-              <VChip size="small" color="grey" variant="outlined">
-                Period: {{ formatDateForDisplay(analysisStartDate) }} → {{ formatDateForDisplay(analysisEndDate) }}
-              </VChip>
-            </div>
-            <!-- Analysis Button -->
-            <VBtn
-              :loading="isAnalyzingFlood"
-              :disabled="isAnalyzingFlood"
-              color="primary"
-              variant="flat"
-              block
-              class="mb-3"
-              @click="handleFloodAnalysis"
-            >
-              <PhRadioButton size="16" class="mr-2" />
-              {{ isAnalyzingFlood ? 'Analyzing Satellite Data...' : 'Run Flood Analysis' }}
-            </VBtn>
-
-            <!-- Error Message -->
-            <VAlert
-              v-if="errorMessage"
-              type="error"
-              variant="tonal"
-              density="compact"
-              class="mb-3"
-              closable
-              @click:close="errorMessage = null"
-            >
-              <template #text>
-                {{ errorMessage }}
-              </template>
-            </VAlert>
-
-            <!-- Analysis Results -->
-            <div v-if="floodResults" class="analysis-results">
-              <VDivider class="mb-3" />
-              
-              <div class="results-header mb-3">
-                <div class="d-flex align-center justify-space-between">
-                  <h4 class="text-h6">Analysis Results</h4>
-                  <VChip 
-                    :color="floodResults.floodData.features.length > 0 ? 'error' : 'success'"
-                    size="small"
-                  >
-                    {{ floodResults.floodData.features.length > 0 ? 'Flood Detected' : 'No Flood' }}
-                  </VChip>
-                </div>
+      <v-tabs-window v-model="tab">
+        <!-- General Info Tab -->
+        <v-tabs-window-item value="tab-1">
+          <!-- Area Header -->
+          <div class="area-header mb-4">
+            <div class="d-flex align-center mb-2">
+              <PhBuildings 
+                v-if="areaDetails.type === 'Municipality'" 
+                size="32" 
+                class="mr-3 text-primary" 
+              />
+              <PhMapPin 
+                v-else 
+                size="32" 
+                class="mr-3 text-secondary" 
+              />
+              <div>
+                <h2 class="area-title">{{ areaDetails.name }}</h2>
+                <p class="area-type text-grey">{{ areaDetails.type }}</p>
               </div>
+            </div>
+          </div>
 
-              <div class="results-details">
+          <!-- Area Information -->
+          <VCard variant="outlined" class="mb-4">
+            <VCardTitle class="text-subtitle-1 pb-2">
+              <PhInfo size="20" class="mr-2" />
+              Location Information
+            </VCardTitle>
+            <VCardText>
+              <div class="info-grid">
                 <div class="info-item">
-                  <span class="info-label">Sensor:</span>
-                  <span class="info-value">{{ floodResults.metadata.sensor }}</span>
-                </div>
-                <div class="info-item">
-                  <span class="info-label">Analysis Date:</span>
-                  <span class="info-value">{{ new Date(floodResults.metadata.analysisDate).toLocaleDateString() }}</span>
-                </div>
-                <div class="info-item">
-                  <span class="info-label">Period:</span>
-                  <span class="info-value">{{ floodResults.dateRange }}</span>
-                </div>
-                <div class="info-item">
-                  <span class="info-label">Flood Areas:</span>
-                  <span class="info-value">{{ floodResults.floodData.features.length }} polygons</span>
-                </div>
-                <div class="info-item">
-                  <span class="info-label">Resolution:</span>
-                  <span class="info-value">{{ floodResults.metadata.scale }}</span>
-                </div>
-              </div>
-
-              <!-- Flood Areas Details -->
-              <div v-if="floodResults.floodData.features.length > 0" class="flood-areas-details mt-3">
-                <p class="text-subtitle-2 mb-2">🌊 Detected Flood Areas</p>
-                <div class="flood-legend">
-                  <div class="legend-item">
-                    <div class="legend-color flood-color"></div>
-                    <span class="legend-label">Flooded Areas ({{ floodResults.floodData.features.length }})</span>
-                  </div>
+                  <span class="info-label">Province:</span>
+                  <span class="info-value">Bukidnon</span>
                 </div>
                 
+                <div v-if="areaDetails.municipality && areaDetails.type === 'Barangay'" class="info-item">
+                  <span class="info-label">City:</span>
+                  <span class="info-value">Malaybalay City</span>
+                </div>
+                
+                <div class="info-item">
+                  <span class="info-label">Region:</span>
+                  <span class="info-value">Region X</span>
+                </div>
+                
+                <div class="info-item">
+                  <span class="info-label">Country:</span>
+                  <span class="info-value">Philippines</span>
+                </div>
+              </div>
+            </VCardText>
+          </VCard>
+
+          
+        </v-tabs-window-item>
+
+        <!-- Flood & Forest Data Tab -->
+  <v-tabs-window-item value="tab-2">
+          <!-- Tab-level Analysis Period Summary -->
+          <!-- Analysis Configuration -->
+          <VCard variant="outlined" class="mb-4">
+            <VCardTitle class="text-subtitle-1 pb-2">
+              📅 Analysis Period Configuration
+            </VCardTitle>
+            <VCardText>
+              <div class="date-range-selection">
+                <p class="text-subtitle-2 mb-2">Satellite Data Period</p>
+                <VRow class="ma-0">
+                  <VCol cols="12" class="pa-1">
+                    <VTextField
+                      v-model="analysisStartDate"
+                      type="date"
+                      label="Start Date"
+                      variant="outlined"
+                      density="compact"
+                      hide-details
+                      :max="todayDate"
+                    />
+                  </VCol>
+                  <VCol cols="12" class="pa-1">
+                    <VTextField
+                      v-model="analysisEndDate"
+                      type="date"
+                      label="End Date"
+                      variant="outlined"
+                      density="compact"
+                      hide-details
+                      :max="todayDate"
+                    />
+                  </VCol>
+                </VRow>
                 <VAlert
-                  type="warning"
+                  type="info"
                   variant="tonal"
                   density="compact"
                   class="mt-2"
                 >
                   <template #text>
-                    Satellite analysis detected {{ floodResults.floodData.features.length }} flood area{{ floodResults.floodData.features.length > 1 ? 's' : '' }} 
-                    in {{ areaDetails?.name }} during the specified period.
+                    This date range applies to all satellite analysis types below.
                   </template>
                 </VAlert>
               </div>
+            </VCardText>
+          </VCard>
+          <!-- Satellite Flood Analysis -->
+          <VCard variant="outlined" class="mb-4">
+            <VCardTitle class="text-subtitle-1 pb-2">
+              <PhRadioButton size="20" class="mr-2" />
+              Satellite Flood Analysis
+            </VCardTitle>
+            <VCardText>
+              <div class="flood-analysis-section">
+                <div class="analysis-period-info mb-2">
+                  <VChip size="small" color="grey" variant="outlined">
+                    Period: {{ formatDateForDisplay(analysisStartDate) }} → {{ formatDateForDisplay(analysisEndDate) }}
+                  </VChip>
+                </div>
+                <!-- Analysis Button -->
+                <VBtn
+                  :loading="isAnalyzingFlood"
+                  :disabled="isAnalyzingFlood"
+                  color="primary"
+                  variant="flat"
+                  block
+                  class="mb-3"
+                  @click="handleFloodAnalysis"
+                >
+                  <PhRadioButton size="16" class="mr-2" />
+                  {{ isAnalyzingFlood ? 'Analyzing Satellite Data...' : 'Run Flood Analysis' }}
+                </VBtn>
 
-              <div v-else class="no-flood-message mt-3">
+                <!-- Error Message -->
                 <VAlert
-                  type="success"
+                  v-if="errorMessage"
+                  type="error"
                   variant="tonal"
                   density="compact"
+                  class="mb-3"
+                  closable
+                  @click:close="errorMessage = null"
                 >
                   <template #text>
-                    No flood areas detected in {{ areaDetails?.name }} during {{ floodResults.dateRange }}.
+                    {{ errorMessage }}
                   </template>
                 </VAlert>
-              </div>
 
-              <!-- Technical Details -->
-              <VExpansionPanels class="mt-3" variant="accordion">
-                <VExpansionPanel>
-                  <VExpansionPanelTitle>
-                    <PhInfo size="16" class="mr-2" />
-                    Technical Details
-                  </VExpansionPanelTitle>
-                  <VExpansionPanelText>
-                    <div class="technical-details">
-                      <p><strong>Data Source:</strong> Sentinel-1 SAR imagery</p>
-                      <p><strong>Processing:</strong> Radar backscatter analysis</p>
-                      <p><strong>Threshold:</strong> {{ floodResults.metadata.threshold }}</p>
-                      <p><strong>Method:</strong> Water detection using synthetic aperture radar</p>
-                      <p><strong>Cloud Independence:</strong> Yes (radar can penetrate clouds)</p>
+                <!-- Analysis Results -->
+                <div v-if="floodResults" class="analysis-results">
+                  <VDivider class="mb-3" />
+                  
+                  <div class="results-header mb-3">
+                    <div class="d-flex align-center justify-space-between">
+                      <h4 class="text-h6">Analysis Results</h4>
+                      <VChip 
+                        :color="floodResults.floodData.features.length > 0 ? 'error' : 'success'"
+                        size="small"
+                      >
+                        {{ floodResults.floodData.features.length > 0 ? 'Flood Detected' : 'No Flood' }}
+                      </VChip>
                     </div>
-                  </VExpansionPanelText>
-                </VExpansionPanel>
-              </VExpansionPanels>
-            </div>
-          </div>
-        </VCardText>
-      </VCard>
+                  </div>
 
-      <!-- Forest Analysis -->
-      <VCard variant="outlined" class="mb-4">
-        <VCardTitle class="text-subtitle-1 pb-2">
-          🌲 Forest Cover Analysis
-        </VCardTitle>
-        <VCardText>
-          <div class="analysis-section">
-            <div class="analysis-period-info mb-2">
-              <VChip size="small" color="grey" variant="outlined">
-                Period: {{ formatDateForDisplay(analysisStartDate) }} → {{ formatDateForDisplay(analysisEndDate) }}
-              </VChip>
-            </div>
-            
-            <VBtn
-              :loading="isAnalyzingForest"
-              :disabled="isAnalyzingForest"
-              color="success"
-              variant="flat"
-              block
-              class="mb-3"
-              @click="handleForestAnalysis"
-            >
-              🌲 {{ isAnalyzingForest ? 'Analyzing Forest Cover...' : 'Analyze Forest Cover' }}
-            </VBtn>
+                  <div class="results-details">
+                    <div class="info-item">
+                      <span class="info-label">Sensor:</span>
+                      <span class="info-value">{{ floodResults.metadata.sensor }}</span>
+                    </div>
+                    <div class="info-item">
+                      <span class="info-label">Analysis Date:</span>
+                      <span class="info-value">{{ new Date(floodResults.metadata.analysisDate).toLocaleDateString() }}</span>
+                    </div>
+                    <div class="info-item">
+                      <span class="info-label">Period:</span>
+                      <span class="info-value">{{ floodResults.dateRange }}</span>
+                    </div>
+                    <div class="info-item">
+                      <span class="info-label">Flood Areas:</span>
+                      <span class="info-value">{{ floodResults.floodData.features.length }} polygons</span>
+                    </div>
+                    <div class="info-item">
+                      <span class="info-label">Resolution:</span>
+                      <span class="info-value">{{ floodResults.metadata.scale }}</span>
+                    </div>
+                  </div>
 
-            <!-- Forest Results -->
-            <div v-if="forestResults" class="analysis-results">
-              <VDivider class="mb-3" />
-              
-              <div class="results-header mb-3">
-                <div class="d-flex align-center justify-space-between">
-                  <h4 class="text-h6">Forest Analysis Results</h4>
-                  <VChip 
-                    :color="forestResults.forestData.features.length > 0 ? 'success' : 'warning'"
-                    size="small"
-                  >
-                    {{ forestResults.forestData.features.length > 0 ? 'Forest Detected' : 'No Forest' }}
+                  <!-- Flood Areas Details -->
+                  <div v-if="floodResults.floodData.features.length > 0" class="flood-areas-details mt-3">
+                    <p class="text-subtitle-2 mb-2">🌊 Detected Flood Areas</p>
+                    <div class="flood-legend">
+                      <div class="legend-item">
+                        <div class="legend-color flood-color"></div>
+                        <span class="legend-label">Flooded Areas ({{ floodResults.floodData.features.length }})</span>
+                      </div>
+                    </div>
+                    
+                    <VAlert
+                      type="warning"
+                      variant="tonal"
+                      density="compact"
+                      class="mt-2"
+                    >
+                      <template #text>
+                        Satellite analysis detected {{ floodResults.floodData.features.length }} flood area{{ floodResults.floodData.features.length > 1 ? 's' : '' }} 
+                        in {{ areaDetails?.name }} during the specified period.
+                      </template>
+                    </VAlert>
+                  </div>
+
+                  <div v-else class="no-flood-message mt-3">
+                    <VAlert
+                      type="success"
+                      variant="tonal"
+                      density="compact"
+                    >
+                      <template #text>
+                        No flood areas detected in {{ areaDetails?.name }} during {{ floodResults.dateRange }}.
+                      </template>
+                    </VAlert>
+                  </div>
+
+                  <!-- Technical Details -->
+                  <VExpansionPanels class="mt-3" variant="accordion">
+                    <VExpansionPanel>
+                      <VExpansionPanelTitle>
+                        <PhInfo size="16" class="mr-2" />
+                        Technical Details
+                      </VExpansionPanelTitle>
+                      <VExpansionPanelText>
+                        <div class="technical-details">
+                          <p><strong>Data Source:</strong> Sentinel-1 SAR imagery</p>
+                          <p><strong>Processing:</strong> Radar backscatter analysis</p>
+                          <p><strong>Threshold:</strong> {{ floodResults.metadata.threshold }}</p>
+                          <p><strong>Method:</strong> Water detection using synthetic aperture radar</p>
+                          <p><strong>Cloud Independence:</strong> Yes (radar can penetrate clouds)</p>
+                        </div>
+                      </VExpansionPanelText>
+                    </VExpansionPanel>
+                  </VExpansionPanels>
+                </div>
+              </div>
+            </VCardText>
+          </VCard>
+
+          <!-- Forest Analysis -->
+          <VCard variant="outlined" class="mb-4">
+            <VCardTitle class="text-subtitle-1 pb-2">
+              Forest Cover Analysis
+            </VCardTitle>
+            <VCardText>
+              <div class="analysis-section">
+                <div class="analysis-period-info mb-2">
+                  <VChip size="small" color="grey" variant="outlined">
+                    Period: {{ formatDateForDisplay(analysisStartDate) }} → {{ formatDateForDisplay(analysisEndDate) }}
                   </VChip>
                 </div>
-              </div>
-
-              <div class="results-details">
-                <div class="info-item">
-                  <span class="info-label">Forest Areas:</span>
-                  <span class="info-value">{{ forestResults.forestData.features.length }} polygons</span>
-                </div>
-                <div class="info-item">
-                  <span class="info-label">Index:</span>
-                  <span class="info-value">{{ forestResults.metadata.index }}</span>
-                </div>
-                <div class="info-item">
-                  <span class="info-label">Sensor:</span>
-                  <span class="info-value">{{ forestResults.metadata.sensor }}</span>
-                </div>
-              </div>
-
-              <div v-if="forestResults.forestData.features.length > 0" class="forest-areas-details mt-3">
-                <VAlert type="success" variant="tonal" density="compact">
-                  <template #text>
-                    🌲 {{ forestResults.forestData.features.length }} forest area{{ forestResults.forestData.features.length > 1 ? 's' : '' }} 
-                    detected in {{ areaDetails?.name }}.
-                  </template>
-                </VAlert>
-              </div>
-              
-              <div v-else class="no-forest-message mt-3">
-                <VAlert type="info" variant="tonal" density="compact">
-                  <template #text>
-                    {{ forestResults.metadata.note || `No forest areas detected in ${areaDetails?.name} during the analysis period.` }}
-                  </template>
-                </VAlert>
-              </div>
-            </div>
-          </div>
-        </VCardText>
-      </VCard>
-
-      <!-- Illegal Logging Analysis -->
-      <VCard variant="outlined" class="mb-4">
-        <VCardTitle class="text-subtitle-1 pb-2">
-          🪓 Illegal Logging Detection
-        </VCardTitle>
-        <VCardText>
-          <div class="analysis-section">
-            <div class="analysis-period-info mb-2">
-              <VChip size="small" color="grey" variant="outlined">
-                Period: {{ formatDateForDisplay(analysisStartDate) }} → {{ formatDateForDisplay(analysisEndDate) }}
-              </VChip>
-            </div>
-            
-            <VBtn
-              :loading="isAnalyzingLogging"
-              :disabled="isAnalyzingLogging"
-              color="warning"
-              variant="flat"
-              block
-              class="mb-3"
-              @click="handleIllegalLoggingAnalysis"
-            >
-              🪓 {{ isAnalyzingLogging ? 'Analyzing Forest Loss...' : 'Detect Forest Loss' }}
-            </VBtn>
-
-            <!-- Logging Results -->
-            <div v-if="loggingResults" class="analysis-results">
-              <VDivider class="mb-3" />
-              
-              <div class="results-header mb-3">
-                <div class="d-flex align-center justify-space-between">
-                  <h4 class="text-h6">Forest Loss Analysis</h4>
-                  <VChip 
-                    :color="loggingResults.forestLossData.features.length > 0 ? 'warning' : 'success'"
-                    size="small"
-                  >
-                    {{ loggingResults.forestLossData.features.length > 0 ? 'Loss Detected' : 'No Loss' }}
-                  </VChip>
-                </div>
-              </div>
-
-              <div class="results-details">
-                <div class="info-item">
-                  <span class="info-label">Loss Areas:</span>
-                  <span class="info-value">{{ loggingResults.forestLossData.features.length }} polygons</span>
-                </div>
-                <div class="info-item">
-                  <span class="info-label">Dataset:</span>
-                  <span class="info-value">{{ loggingResults.metadata.dataset }}</span>
-                </div>
-                <div class="info-item">
-                  <span class="info-label">Years:</span>
-                  <span class="info-value">{{ loggingResults.metadata.analysisYears }}</span>
-                </div>
-                <div class="info-item">
-                  <span class="info-label">Tree Cover:</span>
-                  <span class="info-value">{{ loggingResults.metadata.treeCoverThreshold }}</span>
-                </div>
-              </div>
-
-              <div v-if="loggingResults.forestLossData.features.length > 0" class="logging-areas-details mt-3">
-                <VAlert type="warning" variant="tonal" density="compact">
-                  <template #text>
-                    🪓 {{ loggingResults.forestLossData.features.length }} forest loss area{{ loggingResults.forestLossData.features.length > 1 ? 's' : '' }} 
-                    detected in {{ areaDetails?.name }} during {{ loggingResults.metadata.analysisYears }}.
-                  </template>
-                </VAlert>
-              </div>
-              
-              <div v-else class="no-logging-message mt-3">
-                <VAlert type="success" variant="tonal" density="compact">
-                  <template #text>
-                    No significant forest loss detected in {{ areaDetails?.name }} during the analysis period.
-                  </template>
-                </VAlert>
-              </div>
-            </div>
-          </div>
-        </VCardText>
-      </VCard>
-
-      <!-- Forest Fire Analysis -->
-      <VCard variant="outlined" class="mb-4">
-        <VCardTitle class="text-subtitle-1 pb-2">
-          🔥 Forest Fire Detection
-        </VCardTitle>
-        <VCardText>
-          <div class="analysis-section">
-            <div class="analysis-period-info mb-2">
-              <VChip size="small" color="grey" variant="outlined">
-                Period: {{ formatDateForDisplay(analysisStartDate) }} → {{ formatDateForDisplay(analysisEndDate) }}
-              </VChip>
-            </div>
-            
-            <VBtn
-              :loading="isAnalyzingFires"
-              :disabled="isAnalyzingFires"
-              color="error"
-              variant="flat"
-              block
-              class="mb-3"
-              @click="handleForestFireAnalysis"
-            >
-              🔥 {{ isAnalyzingFires ? 'Analyzing Burned Areas...' : 'Detect Forest Fires' }}
-            </VBtn>
-
-            <!-- Fire Results -->
-            <div v-if="fireResults" class="analysis-results">
-              <VDivider class="mb-3" />
-              
-              <div class="results-header mb-3">
-                <div class="d-flex align-center justify-space-between">
-                  <h4 class="text-h6">Fire Analysis Results</h4>
-                  <VChip 
-                    :color="fireResults.burnedAreaData.features.length > 0 ? 'error' : 'success'"
-                    size="small"
-                  >
-                    {{ fireResults.burnedAreaData.features.length > 0 ? 'Fire Detected' : 'No Fire' }}
-                  </VChip>
-                </div>
-              </div>
-
-              <div class="results-details">
-                <div class="info-item">
-                  <span class="info-label">Burned Areas:</span>
-                  <span class="info-value">{{ fireResults.burnedAreaData.features.length }} polygons</span>
-                </div>
-                <div class="info-item">
-                  <span class="info-label">Method:</span>
-                  <span class="info-value">{{ fireResults.metadata.method }}</span>
-                </div>
-                <div class="info-item">
-                  <span class="info-label">Datasets:</span>
-                  <span class="info-value">{{ fireResults.metadata.datasets.join(', ') }}</span>
-                </div>
-                <div v-if="fireResults.metadata.threshold" class="info-item">
-                  <span class="info-label">Threshold:</span>
-                  <span class="info-value">{{ fireResults.metadata.threshold }}</span>
-                </div>
-                <div v-if="fireResults.metadata.imageCount" class="info-item">
-                  <span class="info-label">Images Used:</span>
-                  <span class="info-value">{{ fireResults.metadata.imageCount }}</span>
-                </div>
-              </div>
-
-              <div v-if="fireResults.burnedAreaData.features.length > 0" class="fire-areas-details mt-3">
-                <VAlert type="error" variant="tonal" density="compact">
-                  <template #text>
-                    🔥 {{ fireResults.burnedAreaData.features.length }} burned area{{ fireResults.burnedAreaData.features.length > 1 ? 's' : '' }} 
-                    detected in {{ areaDetails?.name }}.
-                  </template>
-                </VAlert>
-              </div>
-              
-              <div v-else class="no-fire-message mt-3">
-                <VAlert type="success" variant="tonal" density="compact">
-                  <template #text>
-                    {{ fireResults.metadata.note || `No burned areas detected in ${areaDetails?.name} during the analysis period.` }}
-                  </template>
-                </VAlert>
-              </div>
-            </div>
-          </div>
-        </VCardText>
-      </VCard>
-
-      <!-- Health & Disaster Risk Analysis -->
-      <VCard variant="outlined" class="mb-4">
-        <VCardTitle class="text-subtitle-1 pb-2">
-          🏥 Health & Disaster Risk Analysis
-        </VCardTitle>
-        <VCardText>
-          <div class="health-analysis-section">
-            <!-- Flooded Areas Data -->
-            <div class="data-section mb-3">
-              <div class="d-flex align-center justify-space-between mb-2">
-                <h4 class="text-subtitle-2">🌊 Flooded Areas Data</h4>
+                
                 <VBtn
-                  :loading="isLoadingFloodedAreas"
-                  :disabled="isLoadingFloodedAreas"
-                  size="small"
-                  color="primary"
-                  variant="outlined"
-                  @click="fetchFloodedAreas"
+                  :loading="isAnalyzingForest"
+                  :disabled="isAnalyzingForest"
+                  color="success"
+                  variant="flat"
+                  block
+                  class="mb-3"
+                  @click="handleForestAnalysis"
                 >
-                  {{ isLoadingFloodedAreas ? 'Loading...' : 'Load Data' }}
+                  {{ isAnalyzingForest ? 'Analyzing Forest Cover...' : 'Analyze Forest Cover' }}
                 </VBtn>
-              </div>
-              
-              <div v-if="floodedAreasData" class="data-summary">
-                <VAlert type="info" variant="tonal" density="compact" class="mb-2">
-                  <template #text>
-                    Found {{ floodedAreasData.totalAreas }} flooded areas with {{ floodedAreasData.data.filter((f: any) => f.severity === 'Critical').length }} critical zones
-                  </template>
-                </VAlert>
-                
-                <!-- Flood Legend -->
-                <div class="legend-section mb-3">
-                  <h5 class="text-subtitle-2 mb-2">🌊 Flood Severity Legend</h5>
-                  <div class="legend-grid">
-                    <div class="legend-item">
-                      <div class="legend-circle flood-critical"></div>
-                      <span class="legend-text">Critical (25px)</span>
-                    </div>
-                    <div class="legend-item">
-                      <div class="legend-circle flood-high"></div>
-                      <span class="legend-text">High (20px)</span>
-                    </div>
-                    <div class="legend-item">
-                      <div class="legend-circle flood-moderate"></div>
-                      <span class="legend-text">Moderate (16px)</span>
-                    </div>
-                    <div class="legend-item">
-                      <div class="legend-circle flood-low"></div>
-                      <span class="legend-text">Low (12px)</span>
-                    </div>
-                  </div>
-                </div>
-                
-                <div class="data-details">
-                  <div class="info-item">
-                    <span class="info-label">Total Areas:</span>
-                    <span class="info-value">{{ floodedAreasData.totalAreas }}</span>
-                  </div>
-                  <div class="info-item">
-                    <span class="info-label">Critical Zones:</span>
-                    <span class="info-value">{{ floodedAreasData.data.filter((f: any) => f.severity === 'Critical').length }}</span>
-                  </div>
-                  <div class="info-item">
-                    <span class="info-label">Affected Population:</span>
-                    <span class="info-value">{{ floodedAreasData.data.reduce((sum: number, f: any) => sum + f.affectedPopulation, 0).toLocaleString() }}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
 
-            <!-- Disease Areas Data -->
-            <div class="data-section mb-3">
-              <div class="d-flex align-center justify-space-between mb-2">
-                <h4 class="text-subtitle-2">🦠 Disease Areas Data</h4>
+                <!-- Forest Results -->
+                <div v-if="forestResults" class="analysis-results">
+                  <VDivider class="mb-3" />
+                  
+                  <div class="results-header mb-3">
+                    <div class="d-flex align-center justify-space-between">
+                      <h4 class="text-h6">Forest Analysis Results</h4>
+                      <VChip 
+                        :color="forestResults.forestData.features.length > 0 ? 'success' : 'warning'"
+                        size="small"
+                      >
+                        {{ forestResults.forestData.features.length > 0 ? 'Forest Detected' : 'No Forest' }}
+                      </VChip>
+                    </div>
+                  </div>
+
+                  <div class="results-details">
+                    <div class="info-item">
+                      <span class="info-label">Forest Areas:</span>
+                      <span class="info-value">{{ forestResults.forestData.features.length }}</span>
+                    </div>
+                    <div class="info-item">
+                      <span class="info-label">Sensor:</span>
+                      <span class="info-value">{{ forestResults.metadata.sensor }}</span>
+                    </div>
+                  </div>
+
+                  <div v-if="forestResults.forestData.features.length > 0" class="forest-areas-details mt-3">
+                    <VAlert type="success" variant="tonal" density="compact">
+                      <template #text>
+                        {{ forestResults.forestData.features.length }} forest area{{ forestResults.forestData.features.length > 1 ? 's' : '' }} 
+                        detected in {{ areaDetails?.name }}.
+                      </template>
+                    </VAlert>
+                  </div>
+                  
+                  <div v-else class="no-forest-message mt-3">
+                    <VAlert type="info" variant="tonal" density="compact">
+                      <template #text>
+                        {{ forestResults.metadata.note || `No forest areas detected in ${areaDetails?.name} during the analysis period.` }}
+                      </template>
+                    </VAlert>
+                  </div>
+                </div>
+              </div>
+            </VCardText>
+          </VCard>
+
+          <!-- Illegal Logging Analysis -->
+          <VCard variant="outlined" class="mb-4">
+            <VCardTitle class="text-subtitle-1 pb-2">
+              Forest Loss Detection
+            </VCardTitle>
+            <VCardText>
+              <div class="analysis-section">
+                <div class="analysis-period-info mb-2">
+                  <VChip size="small" color="grey" variant="outlined">
+                    Period: {{ formatDateForDisplay(analysisStartDate) }} → {{ formatDateForDisplay(analysisEndDate) }}
+                  </VChip>
+                </div>
+                
                 <VBtn
-                  :loading="isLoadingDiseaseAreas"
-                  :disabled="isLoadingDiseaseAreas"
-                  size="small"
-                  color="orange"
-                  variant="outlined"
-                  @click="fetchDiseaseAreas"
+                  :loading="isAnalyzingLogging"
+                  :disabled="isAnalyzingLogging"
+                  color="warning"
+                  variant="flat"
+                  block
+                  class="mb-3"
+                  @click="handleIllegalLoggingAnalysis"
                 >
-                  {{ isLoadingDiseaseAreas ? 'Loading...' : 'Load Data' }}
+                  {{ isAnalyzingLogging ? 'Analyzing Forest Loss...' : 'Detect Forest Loss' }}
                 </VBtn>
+
+                <!-- Logging Results -->
+                <div v-if="loggingResults" class="analysis-results">
+                  <VDivider class="mb-3" />
+                  
+                  <div class="results-header mb-3">
+                    <div class="d-flex align-center justify-space-between">
+                      <h4 class="text-h6">Forest Loss Analysis</h4>
+                      <VChip 
+                        :color="loggingResults.forestLossData.features.length > 0 ? 'warning' : 'success'"
+                        size="small"
+                      >
+                        {{ loggingResults.forestLossData.features.length > 0 ? 'Loss Detected' : 'No Loss' }}
+                      </VChip>
+                    </div>
+                  </div>
+
+                  <div class="results-details">
+                    <div class="info-item">
+                      <span class="info-label">Loss Areas:</span>
+                      <span class="info-value">{{ loggingResults.forestLossData.features.length }}</span>
+                    </div>
+                    <div class="info-item">
+                      <span class="info-label">Tree Cover:</span>
+                      <span class="info-value">{{ loggingResults.metadata.treeCoverThreshold }}</span>
+                    </div>
+                  </div>
+
+                  <div v-if="loggingResults.forestLossData.features.length > 0" class="logging-areas-details mt-3">
+                    <VAlert type="warning" variant="tonal" density="compact">
+                      <template #text>
+                        🪓 {{ loggingResults.forestLossData.features.length }} forest loss area{{ loggingResults.forestLossData.features.length > 1 ? 's' : '' }} 
+                        detected in {{ areaDetails?.name }} 
+                      </template>
+                    </VAlert>
+                  </div>
+                  
+                  <div v-else class="no-logging-message mt-3">
+                    <VAlert type="success" variant="tonal" density="compact">
+                      <template #text>
+                        No significant forest loss detected in {{ areaDetails?.name }}
+                      </template>
+                    </VAlert>
+                  </div>
+                </div>
               </div>
-              
-              <div v-if="diseaseAreasData" class="data-summary">
-                <VAlert type="warning" variant="tonal" density="compact" class="mb-2">
+            </VCardText>
+          </VCard>
+
+          <!-- Forest Fire Analysis -->
+          <VCard variant="outlined" class="mb-4">
+            <VCardTitle class="text-subtitle-1 pb-2">
+              Forest Fire Detection
+            </VCardTitle>
+            <VCardText>
+              <div class="analysis-section">
+                <div class="analysis-period-info mb-2">
+                  <VChip size="small" color="grey" variant="outlined">
+                    Period: {{ formatDateForDisplay(analysisStartDate) }} → {{ formatDateForDisplay(analysisEndDate) }}
+                  </VChip>
+                </div>
+                
+                <VBtn
+                  :loading="isAnalyzingFires"
+                  :disabled="isAnalyzingFires"
+                  color="error"
+                  variant="flat"
+                  block
+                  class="mb-3"
+                  @click="handleForestFireAnalysis"
+                >
+                  {{ isAnalyzingFires ? 'Analyzing Burned Areas...' : 'Detect Forest Fires' }}
+                </VBtn>
+
+                <!-- Fire Results -->
+                <div v-if="fireResults" class="analysis-results">
+                  <VDivider class="mb-3" />
+                  
+                  <div class="results-header mb-3">
+                    <div class="d-flex align-center justify-space-between">
+                      <h4 class="text-h6">Fire Analysis Results</h4>
+                      <VChip 
+                        :color="fireResults.burnedAreaData.features.length > 0 ? 'error' : 'success'"
+                        size="small"
+                      >
+                        {{ fireResults.burnedAreaData.features.length > 0 ? 'Fire Detected' : 'No Fire' }}
+                      </VChip>
+                    </div>
+                  </div>
+
+                  <div class="results-details">
+                    <div class="info-item">
+                      <span class="info-label">Burned Areas:</span>
+                      <span class="info-value">{{ fireResults.burnedAreaData.features.length }}</span>
+                    </div>
+                  </div>
+
+                  <div v-if="fireResults.burnedAreaData.features.length > 0" class="fire-areas-details mt-3">
+                    <VAlert type="error" variant="tonal" density="compact">
+                      <template #text>
+                        {{ fireResults.burnedAreaData.features.length }} burned area{{ fireResults.burnedAreaData.features.length > 1 ? 's' : '' }} 
+                        detected in {{ areaDetails?.name }}.
+                      </template>
+                    </VAlert>
+                  </div>
+                  
+                  <div v-else class="no-fire-message mt-3">
+                    <VAlert type="success" variant="tonal" density="compact">
+                      <template #text>
+                        {{ fireResults.metadata.note || `No burned areas detected in ${areaDetails?.name} during the analysis period.` }}
+                      </template>
+                    </VAlert>
+                  </div>
+                </div>
+              </div>
+            </VCardText>
+          </VCard>
+  </v-tabs-window-item>
+
+        <!-- Health & Disaster Analysis Tab -->
+  <v-tabs-window-item value="tab-3">
+          <!-- Health & Disaster Risk Analysis -->
+          <VCard variant="outlined" class="mb-4">
+            <VCardTitle class="text-subtitle-1 pb-2">
+              Health & Disaster Risk Analysis
+            </VCardTitle>
+            <VCardText>
+              <div class="health-analysis-section">
+                <!-- Flooded Areas Data -->
+                <div class="data-section mb-3">
+                  <div class="mb-2">
+                      <h4 class="text-subtitle-2 mb-2">🌊 Flooded Areas Data</h4>
+                      <div class="d-flex" style="gap:8px;">
+                        <VBtn
+                          :loading="isLoadingFloodedAreas"
+                          :disabled="isLoadingFloodedAreas"
+                          size="small"
+                          color="primary"
+                          variant="outlined"
+                          @click="fetchFloodedAreas"
+                        >
+                          {{ isLoadingFloodedAreas ? 'Loading...' : 'Load Data' }}
+                        </VBtn>
+
+                        <!-- Download CSV when data is present -->
+                        <VBtn
+                          v-if="floodedAreasData"
+                          :disabled="isLoadingFloodedAreas"
+                          size="small"
+                          color="primary"
+                          variant="tonal"
+                          @click="downloadFloodedAreasCSV"
+                        >
+                          Download CSV
+                        </VBtn>
+                      </div>
+                    </div>
+                  
+                  <div v-if="floodedAreasData" class="data-summary">
+                    <VAlert type="info" variant="tonal" density="compact" class="mb-2">
+                      <template #text>
+                        Found {{ floodedAreasData.totalAreas }} flooded areas with {{ floodedAreasData.data.filter((f: any) => f.severity === 'Critical').length }} critical zones
+                      </template>
+                    </VAlert>
+                    
+                    <!-- Flood Legend (single light-blue ramp, size/intensity vary) -->
+                    <div class="legend-section mb-3">
+                      <h5 class="text-subtitle-2 mb-2">🌊 Flood Legend</h5>
+                      <div class="legend-grid">
+                        <div class="legend-item">
+                          <div class="legend-circle flood-sample small"></div>
+                          <span class="legend-text">Low — small / light (≈6px)</span>
+                        </div>
+                        <div class="legend-item">
+                          <div class="legend-circle flood-sample medium"></div>
+                          <span class="legend-text">Medium — moderate (≈10px)</span>
+                        </div>
+                        <div class="legend-item">
+                          <div class="legend-circle flood-sample large"></div>
+                          <span class="legend-text">High — larger / stronger (≈14px)</span>
+                        </div>
+                      </div>
+                      <div class="legend-note mt-2">
+                        <small class="text-caption">Single light blue hue — color intensity and size scale with water level</small>
+                      </div>
+                    </div>
+                    
+                    <div class="data-details">
+                      <div class="info-item">
+                        <span class="info-label">Total Areas:</span>
+                        <span class="info-value">{{ floodedAreasData.totalAreas }}</span>
+                      </div>
+                      <div class="info-item">
+                        <span class="info-label">Critical Zones:</span>
+                        <span class="info-value">{{ floodedAreasData.data.filter((f: any) => f.severity === 'Critical').length }}</span>
+                      </div>
+                      <div class="info-item">
+                        <span class="info-label">Affected Population:</span>
+                        <span class="info-value">{{ floodedAreasData.data.reduce((sum: number, f: any) => sum + f.affectedPopulation, 0).toLocaleString() }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Disease Areas Data -->
+                <div class="data-section mb-3">
+                  <div class="mb-2">
+                    <h4 class="text-subtitle-2 mb-2">Disease Areas Data</h4>
+                    <div class="d-flex" style="gap:8px;">
+                      <VBtn
+                        :loading="isLoadingDiseaseAreas"
+                        :disabled="isLoadingDiseaseAreas"
+                        size="small"
+                        color="orange"
+                        variant="outlined"
+                        @click="fetchDiseaseAreas"
+                      >
+                        {{ isLoadingDiseaseAreas ? 'Loading...' : 'Load Data' }}
+                      </VBtn>
+
+                      <!-- Download CSV when data is present -->
+                      <VBtn
+                        v-if="diseaseAreasData"
+                        :disabled="isLoadingDiseaseAreas"
+                        size="small"
+                        color="orange"
+                        variant="tonal"
+                        @click="downloadDiseaseAreasCSV"
+                      >
+                        Download CSV
+                      </VBtn>
+                    </div>
+                  </div>
+                  
+                  <div v-if="diseaseAreasData" class="data-summary">
+                    <VAlert type="warning" variant="tonal" density="compact" class="mb-2">
+                      <template #text>
+                        Found {{ diseaseAreasData.totalAreas }} disease outbreak areas with {{ diseaseAreasData.summary.totalCases }} total cases
+                      </template>
+                    </VAlert>
+                    
+                    <!-- Disease Legend (single light-coral ramp, size/intensity vary) -->
+                    <div class="legend-section mb-3">
+                      <h5 class="text-subtitle-2 mb-2">Disease Legend</h5>
+                      <div class="legend-grid">
+                        <div class="legend-item">
+                          <div class="legend-circle disease-sample small"></div>
+                          <span class="legend-text">Low — few cases (≈6px)</span>
+                        </div>
+                        <div class="legend-item">
+                          <div class="legend-circle disease-sample medium"></div>
+                          <span class="legend-text">Medium — moderate cases (≈14px)</span>
+                        </div>
+                        <div class="legend-item">
+                          <div class="legend-circle disease-sample large"></div>
+                          <span class="legend-text">High — many cases (≈20px)</span>
+                        </div>
+                      </div>
+                      <div class="legend-note mt-2">
+                        <small class="text-caption">Single light coral hue — color intensity and size scale with total cases</small>
+                      </div>
+                    </div>
+                    
+                    <div class="data-details">
+                      <div class="info-item">
+                        <span class="info-label">Outbreak Areas:</span>
+                        <span class="info-value">{{ diseaseAreasData.totalAreas }}</span>
+                      </div>
+                      <div class="info-item">
+                        <span class="info-label">Total Cases:</span>
+                        <span class="info-value">{{ diseaseAreasData.summary.totalCases }}</span>
+                      </div>
+                      <div class="info-item">
+                        <span class="info-label">High-Risk Areas:</span>
+                        <span class="info-value">{{ diseaseAreasData.summary.highRiskAreas }}</span>
+                      </div>
+                      <div class="info-item">
+                        <span class="info-label">Diseases Found:</span>
+                        <span class="info-value">{{ diseaseAreasData.summary.diseasesFound.join(', ') }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- AI Analysis Section -->
+                <VDivider class="mb-3" />
+                
+                <div class="d-flex gap-2 mb-3">
+                  <VBtn
+                    :disabled="!floodedAreasData || !diseaseAreasData || isGeneratingAnalysis"
+                    :loading="isGeneratingAnalysis"
+                    color="primary"
+                    variant="flat"
+                    block
+                    @click="generateAIAnalysis"
+                  >
+                    <VIcon start>mdi-robot</VIcon>
+                    {{ isGeneratingAnalysis ? 'Generating Analysis & PDF...' : ' Generate AI Analysis' }}
+                  </VBtn>
+                </div>
+
+                <!-- Analysis Error -->
+                <VAlert v-if="analysisError" type="error" variant="tonal" density="compact" class="mb-3">
                   <template #text>
-                    Found {{ diseaseAreasData.totalAreas }} disease outbreak areas with {{ diseaseAreasData.summary.totalCases }} total cases
+                    {{ analysisError }}
                   </template>
                 </VAlert>
-                
-                <!-- Disease Legend -->
-                <div class="legend-section mb-3">
-                  <h5 class="text-subtitle-2 mb-2">🦠 Disease Risk Legend</h5>
-                  <div class="legend-grid">
-                    <div class="legend-item">
-                      <div class="legend-circle disease-high"></div>
-                      <span class="legend-text">High Risk (18px)</span>
-                    </div>
-                    <div class="legend-item">
-                      <div class="legend-circle disease-moderate"></div>
-                      <span class="legend-text">Moderate Risk (24px)</span>
-                    </div>
-                    <div class="legend-item">
-                      <div class="legend-circle disease-malaria"></div>
-                      <span class="legend-text">Malaria Risk (30px)</span>
-                    </div>
-                    <div class="legend-item">
-                      <div class="legend-circle disease-leptospirosis"></div>
-                      <span class="legend-text">Leptospirosis Risk (38px)</span>
-                    </div>
-                    <div class="legend-item">
-                      <div class="legend-circle disease-low"></div>
-                      <span class="legend-text">Low Risk (18px)</span>
-                    </div>
-                  </div>
-                  <div class="legend-note mt-2">
-                    <small class="text-caption">Circle size varies: 18px (10 cases) to 38px (200+ cases)</small>
-                  </div>
-                </div>
-                
-                <div class="data-details">
-                  <div class="info-item">
-                    <span class="info-label">Outbreak Areas:</span>
-                    <span class="info-value">{{ diseaseAreasData.totalAreas }}</span>
-                  </div>
-                  <div class="info-item">
-                    <span class="info-label">Total Cases:</span>
-                    <span class="info-value">{{ diseaseAreasData.summary.totalCases }}</span>
-                  </div>
-                  <div class="info-item">
-                    <span class="info-label">High-Risk Areas:</span>
-                    <span class="info-value">{{ diseaseAreasData.summary.highRiskAreas }}</span>
-                  </div>
-                  <div class="info-item">
-                    <span class="info-label">Diseases Found:</span>
-                    <span class="info-value">{{ diseaseAreasData.summary.diseasesFound.join(', ') }}</span>
-                  </div>
-                </div>
               </div>
-            </div>
-
-            <!-- AI Analysis Section -->
-            <VDivider class="mb-3" />
-            
-            <div class="d-flex gap-2 mb-3">
-              <VBtn
-                :disabled="!floodedAreasData || !diseaseAreasData || isGeneratingAnalysis"
-                :loading="isGeneratingAnalysis"
-                color="primary"
-                variant="flat"
-                block
-                @click="generateAIAnalysis"
-              >
-                <VIcon start>mdi-robot</VIcon>
-                {{ isGeneratingAnalysis ? 'Generating Analysis & PDF...' : '🤖 Generate AI Analysis & Download PDF' }}
-              </VBtn>
-            </div>
-
-            <!-- Analysis Error -->
-            <VAlert v-if="analysisError" type="error" variant="tonal" density="compact" class="mb-3">
-              <template #text>
-                {{ analysisError }}
-              </template>
-            </VAlert>
-
-            <!-- AI Analysis Response -->
-            <div v-if="aiAnalysisResponse" class="ai-analysis-response mt-3">
-              <VAlert type="success" variant="tonal" density="compact" class="mb-3">
-                <template #text>
-                  ✅ AI Analysis completed! The markdown analysis is displayed below and can be exported as PDF.
-                </template>
-              </VAlert>
-              
-              <VExpansionPanels variant="accordion">
-                <VExpansionPanel>
-                  <VExpansionPanelTitle>
-                    🤖 AI Analysis Results (Markdown)
-                  </VExpansionPanelTitle>
-                  <VExpansionPanelText>
-                    <div class="analysis-content">
-                      <pre style="white-space: pre-wrap; font-family: 'Segoe UI', sans-serif; font-size: 14px; line-height: 1.6;">{{ aiAnalysisResponse }}</pre>
-                    </div>
-                  </VExpansionPanelText>
-                </VExpansionPanel>
-              </VExpansionPanels>
-            </div>
-
-            <!-- Legacy: Analysis Prompt Display (for debugging) -->
-            <div v-if="analysisPrompt && !aiAnalysisResponse" class="analysis-prompt mt-3">
-              <VAlert type="info" variant="tonal" density="compact">
-                <template #text>
-                  Analysis prompt generated! Use the "Generate AI Analysis" button to get AI insights.
-                </template>
-              </VAlert>
-              
-              <VExpansionPanels class="mt-2" variant="accordion">
-                <VExpansionPanel>
-                  <VExpansionPanelTitle>
-                    📋 View Generated Prompt (Debug)
-                  </VExpansionPanelTitle>
-                  <VExpansionPanelText>
-                    <div class="prompt-display">
-                      <pre>{{ analysisPrompt }}</pre>
-                    </div>
-                  </VExpansionPanelText>
-                </VExpansionPanel>
-              </VExpansionPanels>
-            </div>
-          </div>
-        </VCardText>
-      </VCard>
+            </VCardText>
+          </VCard>
+  </v-tabs-window-item>
+  </v-tabs-window>
     </div>
   </VSheet>
 </template>
@@ -1898,41 +2016,37 @@ const handleForestFireAnalysis = async () => {
   color: #666;
 }
 
-/* Flood Legend Colors */
-.flood-critical {
-  background-color: #8B0000;
+/* Legend sample styles for Flood (single light-blue ramp) */
+.legend-circle.flood-sample {
+  background: linear-gradient(180deg, rgba(96,165,250,0.35) 0%, rgba(59,130,246,0.55) 50%, rgba(29,78,216,0.75) 100%);
+}
+.legend-circle.flood-sample.small {
+  width: 12px;
+  height: 12px;
+}
+.legend-circle.flood-sample.medium {
+  width: 16px;
+  height: 16px;
+}
+.legend-circle.flood-sample.large {
+  width: 22px;
+  height: 22px;
 }
 
-.flood-high {
-  background-color: #DC143C;
+/* Legend sample styles for Disease (single light-coral ramp) */
+.legend-circle.disease-sample {
+  background: linear-gradient(180deg, rgba(252,165,165,0.32) 0%, rgba(248,113,113,0.52) 50%, rgba(244,63,94,0.74) 100%);
 }
-
-.flood-moderate {
-  background-color: #FF6347;
+.legend-circle.disease-sample.small {
+  width: 12px;
+  height: 12px;
 }
-
-.flood-low {
-  background-color: #4169E1;
+.legend-circle.disease-sample.medium {
+  width: 18px;
+  height: 18px;
 }
-
-/* Disease Legend Colors */
-.disease-high {
-  background-color: #FF1493;
-}
-
-.disease-moderate {
-  background-color: #FF8C00;
-}
-
-.disease-malaria {
-  background-color: #9370DB;
-}
-
-.disease-leptospirosis {
-  background-color: #00CED1;
-}
-
-.disease-low {
-  background-color: #32CD32;
+.legend-circle.disease-sample.large {
+  width: 24px;
+  height: 24px;
 }
 </style>

@@ -104,7 +104,7 @@ const handleAddItem = () => {
         <VDivider />
         <div class="mt-2">
           <VList>
-            <VRow class="ma-0 justify-center mt-2 mb-4">
+            <!-- <VRow class="ma-0 justify-center mt-2 mb-4">
               <VMenu v-model="addItemDialogMenu" :close-on-content-click="false">
                 <template #activator="{ props }">
                   <PhPlusCircle
@@ -134,7 +134,7 @@ const handleAddItem = () => {
                   </div>
                 </VSheet>
               </VMenu>
-            </VRow>
+            </VRow> -->
             <VListItem
               :class="{ 'active-nav': activeNav === navLink.name }"
               v-for="navLink in navLinks"

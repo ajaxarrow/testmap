@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import { createGlobalState, get } from '@vueuse/core'
+import { createGlobalState, get, set } from '@vueuse/core'
 import type { AreaData } from '../interfaces'
 import { useMapStore } from './map.store'
 //@ts-ignore
@@ -9,12 +9,22 @@ export const useMapAreasStore = createGlobalState(() => {
   const selectedArea = ref<AreaData | null>(null)
   const showAreaDetails = ref(false)
   const { map, lnglat, popup } = useMapStore();
+  const isAreaSelected = ref(false);
+  const setIsAreaSelected = (value: boolean) => {
+    isAreaSelected.value = value;
+  }
   const setSelectedArea = (area: AreaData) => {
     selectedArea.value = area
     showAreaDetails.value = true
   }
 
   const clearSelectedArea = () => {
+    if (selectedArea.value) {
+        const selectedLineLayerId = `id-${selectedArea.value.id}-line`;
+        if (map.value?.getLayer(selectedLineLayerId)) {
+            map.value?.setPaintProperty(selectedLineLayerId, 'line-opacity', 0);
+        }
+    }
     selectedArea.value = null
     showAreaDetails.value = false
   }
@@ -34,6 +44,7 @@ export const useMapAreasStore = createGlobalState(() => {
 
   const clickArea = (area: AreaData) => {
     if (area.id != selectedArea.value?.id) {
+        setIsAreaSelected(false);
 
         if (selectedArea.value){
             // Clear previous selection - reset both fill and line
@@ -69,12 +80,7 @@ export const useMapAreasStore = createGlobalState(() => {
         }
     } else {
         // Clear selection
-        if (selectedArea.value) {
-            const selectedLineLayerId = `id-${selectedArea.value.id}-line`;
-            if (map.value?.getLayer(selectedLineLayerId)) {
-                map.value?.setPaintProperty(selectedLineLayerId, 'line-opacity', 0);
-            }
-        }
+        
         resetToDefault();
     }
   }
@@ -158,24 +164,27 @@ const setupAreas = (areas: AreaData[]) => {
 
                 // @ts-ignore
                 map.value?.on('click', `id-${area.id}`, (e) => {
-                    // @ts-ignore
-                    if (map.value?.getZoom() < 6.25){
-                    // @ts-ignore
-                    map.value?.easeTo({
-                        zoom: 6,
-                        center: [e.lngLat.lng, e.lngLat.lat],
-                        duration: 1000
-                    });
+                    if(!isAreaSelected.value){
+                        // @ts-ignore
+                        if (map.value?.getZoom() < 6.25){
+                        // @ts-ignore
+                        map.value?.easeTo({
+                            zoom: 6,
+                            center: [e.lngLat.lng, e.lngLat.lat],
+                            duration: 1000
+                        });
+                        }
+                        else{
+                        // @ts-ignore
+                        map.value?.easeTo({
+                            zoom: 8,
+                            center: [e.lngLat.lng, e.lngLat.lat],
+                            duration: 1000
+                        });
+                        }
+                        clickArea(area)
                     }
-                    else{
-                    // @ts-ignore
-                    map.value?.easeTo({
-                        zoom: 8,
-                        center: [e.lngLat.lng, e.lngLat.lat],
-                        duration: 1000
-                    });
-                    }
-                    clickArea(area)
+                    
                 });
                 layersWithClickListeners.add(layerId);
             }
@@ -224,6 +233,8 @@ const removeAreas = (area: AreaData[]) => {
     resetToDefault,
     setupAreas,
     removeAreas,
-    clickArea
+    clickArea,
+    isAreaSelected,
+    setIsAreaSelected
   }
 })
