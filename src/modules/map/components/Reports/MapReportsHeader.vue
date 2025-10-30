@@ -1,7 +1,7 @@
 <template>
   <div class="reports-header">
-    <h3 class="text-h6 font-weight-bold mb-2">Reports</h3>
-    <p class="text-caption text-grey">Generate and view analytics reports</p>
+    <h3 class="text-h6 font-weight-bold mb-2">Citizen Reports</h3>
+    <p class="text-caption text-grey">View and manage citizen-submitted reports</p>
   </div>
 </template>
 
