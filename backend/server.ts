@@ -494,6 +494,118 @@ router.post("/analyze-forest-fires", async (req: Request, res: Response) => {
 
 
 
+// Generate dummy flooded areas data
+router.get("/dummy-flooded-areas", (req: Request, res: Response) => {
+  try {
+    console.log("🌊 Generating dummy flooded areas data...");
+    
+    // Generate random flooded areas within the Philippines bounds
+    const floodedAreas = [];
+    const numAreas = Math.floor(Math.random() * 8) + 3; // 3-10 areas
+    
+    for (let i = 0; i < numAreas; i++) {
+      // Random coordinates within Philippines
+      const lat = 5 + Math.random() * 15; // 5°N to 20°N
+      const lng = 116 + Math.random() * 10; // 116°E to 126°E
+      
+      // Random severity level
+      const severity = ['Low', 'Moderate', 'High', 'Critical'][Math.floor(Math.random() * 4)];
+      const waterLevel = Math.random() * 3 + 0.5; // 0.5m to 3.5m
+      
+      floodedAreas.push({
+        id: `flood_${i + 1}`,
+        coordinates: [lng, lat],
+        severity,
+        waterLevel: parseFloat(waterLevel.toFixed(2)),
+        affectedPopulation: Math.floor(Math.random() * 5000) + 100,
+        area: `Area ${i + 1}`,
+        timestamp: new Date().toISOString(),
+        risk: severity === 'Critical' ? 'Extreme' : severity === 'High' ? 'High' : 'Medium'
+      });
+    }
+    
+    res.json({
+      success: true,
+      message: "Dummy flooded areas data generated",
+      data: floodedAreas,
+      totalAreas: floodedAreas.length,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error: any) {
+    console.error("❌ Error generating flooded areas data:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Generate dummy disease areas data
+router.get("/dummy-disease-areas", (req: Request, res: Response) => {
+  try {
+    console.log("🦠 Generating dummy disease areas data...");
+    
+    const diseases = ['Malaria', 'Leptospirosis', 'Dengue', 'Chikungunya', 'Typhoid'];
+    const diseaseAreas = [];
+    const numAreas = Math.floor(Math.random() * 12) + 5; // 5-16 areas
+    
+    for (let i = 0; i < numAreas; i++) {
+      // Random coordinates within Philippines
+      const lat = 5 + Math.random() * 15; // 5°N to 20°N
+      const lng = 116 + Math.random() * 10; // 116°E to 126°E
+      
+      // Random disease selection (can have multiple diseases per area)
+      const numDiseases = Math.floor(Math.random() * 3) + 1; // 1-3 diseases per area
+      const areaDiseases = [];
+      const selectedDiseases = [...diseases].sort(() => 0.5 - Math.random()).slice(0, numDiseases);
+      
+      for (const disease of selectedDiseases) {
+        areaDiseases.push({
+          name: disease,
+          cases: Math.floor(Math.random() * 150) + 10,
+          severity: ['Low', 'Moderate', 'High'][Math.floor(Math.random() * 3)],
+          trend: ['Increasing', 'Stable', 'Decreasing'][Math.floor(Math.random() * 3)]
+        });
+      }
+      
+      // Calculate risk level based on total cases and disease types
+      const totalCases = areaDiseases.reduce((sum, d) => sum + d.cases, 0);
+      const hasHighRiskDisease = areaDiseases.some(d => ['Malaria', 'Leptospirosis'].includes(d.name));
+      
+      let riskLevel = 'Low';
+      if (totalCases > 100 || hasHighRiskDisease) riskLevel = 'High';
+      else if (totalCases > 50) riskLevel = 'Moderate';
+      
+      diseaseAreas.push({
+        id: `disease_${i + 1}`,
+        coordinates: [lng, lat],
+        diseases: areaDiseases,
+        totalCases,
+        riskLevel,
+        area: `Health District ${i + 1}`,
+        reportedDate: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString(), // Last 30 days
+        primaryDisease: areaDiseases[0].name,
+        affectedPopulation: Math.floor(totalCases * (2 + Math.random() * 8)) // 2-10x multiplier for affected vs reported cases
+      });
+    }
+    
+    res.json({
+      success: true,
+      message: "Dummy disease areas data generated",
+      data: diseaseAreas,
+      totalAreas: diseaseAreas.length,
+      summary: {
+        totalCases: diseaseAreas.reduce((sum, area) => sum + area.totalCases, 0),
+        highRiskAreas: diseaseAreas.filter(area => area.riskLevel === 'High').length,
+        diseasesFound: [...new Set(diseaseAreas.flatMap(area => area.diseases.map(d => d.name)))]
+      },
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error: any) {
+    console.error("❌ Error generating disease areas data:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Mount all the router endpoints
 app.use('/', router);
 
@@ -503,4 +615,6 @@ app.listen(PORT, () => {
   console.log(`📋 Health check: http://localhost:${PORT}/health`);
   console.log(`🧪 Test endpoint: http://localhost:${PORT}/test-flood`);
   console.log(`🌊 Flood analysis: POST http://localhost:${PORT}/analyze-flood`);
+  console.log(`🌊 Dummy flooded areas: GET http://localhost:${PORT}/dummy-flooded-areas`);
+  console.log(`🦠 Dummy disease areas: GET http://localhost:${PORT}/dummy-disease-areas`);
 });

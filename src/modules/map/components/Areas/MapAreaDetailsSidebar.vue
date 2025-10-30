@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { PhX, PhMapPin, PhBuildings, PhInfo, PhDropSimple, PhRadioButton } from '@phosphor-icons/vue'
 import { useMapAreasStore } from '../../stores/mapAreas.store'
 import { useSatelliteFloodStore } from '../../stores/satelliteFlood.store.ts'
+import { useMapStore } from '../../stores/map.store'
+import { Popup } from 'maplibre-gl'
 
 const { selectedArea, showAreaDetails, clearSelectedArea } = useMapAreasStore()
 const { 
@@ -23,6 +25,8 @@ const {
   clearAllResults,
   floodLayerVisible 
 } = useSatelliteFloodStore()
+
+const { map } = useMapStore()
 
 // Analysis date range - using more recent dates for better data availability
 const getYesterday = () => {
@@ -69,9 +73,722 @@ const areaDetails = computed(() => {
 const handleClose = () => {
   clearSelectedArea()
   clearAllResults()
+  clearDummyDataLayers()
+}
+
+const clearDummyDataLayers = () => {
+  if (!map.value) return
+  
+  // Remove flood layers
+  if (map.value.getLayer('flood-dots')) {
+    map.value.removeLayer('flood-dots')
+  }
+  if (map.value.getSource('flood-data')) {
+    map.value.removeSource('flood-data')
+  }
+  
+  // Remove disease layers
+  if (map.value.getLayer('disease-areas')) {
+    map.value.removeLayer('disease-areas')
+  }
+  if (map.value.getSource('disease-data')) {
+    map.value.removeSource('disease-data')
+  }
+  
+  // Clear data
+  floodedAreasData.value = null
+  diseaseAreasData.value = null
+  analysisPrompt.value = ''
 }
 
 const errorMessage = ref<string | null>(null)
+
+// Dummy data states
+const floodedAreasData = ref<any>(null)
+const diseaseAreasData = ref<any>(null)
+const isLoadingFloodedAreas = ref(false)
+const isLoadingDiseaseAreas = ref(false)
+const analysisPrompt = ref<string>('')
+
+// Helper function to generate random point within selected area bounds
+const generateRandomPointInArea = () => {
+  if (!selectedArea.value?.geojson?.geometry) {
+    // Fallback to general Philippines area if no specific area selected
+    return [
+      124.5 + Math.random() * 0.8, // Bukidnon longitude range
+      7.5 + Math.random() * 0.8    // Bukidnon latitude range
+    ]
+  }
+
+  const geometry = selectedArea.value.geojson.geometry
+  
+  if (geometry.type === 'Polygon') {
+    const coordinates = geometry.coordinates[0] // Get outer ring
+    
+    // Find bounding box of the polygon
+    let minLng = coordinates[0][0]
+    let maxLng = coordinates[0][0]
+    let minLat = coordinates[0][1]
+    let maxLat = coordinates[0][1]
+    
+    coordinates.forEach((coord: number[]) => {
+      minLng = Math.min(minLng, coord[0])
+      maxLng = Math.max(maxLng, coord[0])
+      minLat = Math.min(minLat, coord[1])
+      maxLat = Math.max(maxLat, coord[1])
+    })
+    
+    // Generate random point within bounding box
+    const lng = minLng + Math.random() * (maxLng - minLng)
+    const lat = minLat + Math.random() * (maxLat - minLat)
+    
+    return [lng, lat]
+  }
+  
+  // Fallback if geometry type is not handled
+  return [
+    124.5 + Math.random() * 0.8,
+    7.5 + Math.random() * 0.8
+  ]
+}
+
+const fetchFloodedAreas = async () => {
+  try {
+    isLoadingFloodedAreas.value = true
+    
+    // Generate dummy data locally instead of fetching from server
+    const floodedAreas = []
+    const numAreas = Math.floor(Math.random() * 6) + 3 // 3-8 areas
+    
+    for (let i = 0; i < numAreas; i++) {
+      const coordinates = generateRandomPointInArea()
+      const severity = ['Low', 'Moderate', 'High', 'Critical'][Math.floor(Math.random() * 4)]
+      const waterLevel = Math.random() * 3 + 0.5
+      
+      floodedAreas.push({
+        id: `flood_${i + 1}`,
+        coordinates,
+        severity,
+        waterLevel: parseFloat(waterLevel.toFixed(2)),
+        affectedPopulation: Math.floor(Math.random() * 5000) + 100,
+        area: `${selectedArea.value?.name || 'Area'} - Zone ${i + 1}`,
+        timestamp: new Date().toISOString(),
+        risk: severity === 'Critical' ? 'Extreme' : severity === 'High' ? 'High' : 'Medium'
+      })
+    }
+    
+    const result = {
+      success: true,
+      message: "Dummy flooded areas data generated",
+      data: floodedAreas,
+      totalAreas: floodedAreas.length,
+      timestamp: new Date().toISOString()
+    }
+    
+    console.log('Generated flooded areas:', result)
+    floodedAreasData.value = result
+    addFloodDotsToMap(result.data)
+  } catch (error) {
+    console.error('Error generating flooded areas:', error)
+  } finally {
+    isLoadingFloodedAreas.value = false
+  }
+}
+
+const fetchDiseaseAreas = async () => {
+  try {
+    isLoadingDiseaseAreas.value = true
+    
+    // Generate dummy data locally instead of fetching from server
+    const diseases = ['Malaria', 'Leptospirosis', 'Dengue', 'Chikungunya', 'Typhoid']
+    const diseaseAreas = []
+    const numAreas = Math.floor(Math.random() * 8) + 4 // 4-11 areas
+    
+    for (let i = 0; i < numAreas; i++) {
+      const coordinates = generateRandomPointInArea()
+      
+      // Random disease selection (can have multiple diseases per area)
+      const numDiseases = Math.floor(Math.random() * 3) + 1 // 1-3 diseases per area
+      const areaDiseases = []
+      const selectedDiseases = [...diseases].sort(() => 0.5 - Math.random()).slice(0, numDiseases)
+      
+      for (const disease of selectedDiseases) {
+        areaDiseases.push({
+          name: disease,
+          cases: Math.floor(Math.random() * 150) + 10,
+          severity: ['Low', 'Moderate', 'High'][Math.floor(Math.random() * 3)],
+          trend: ['Increasing', 'Stable', 'Decreasing'][Math.floor(Math.random() * 3)]
+        })
+      }
+      
+      // Calculate risk level based on total cases and disease types
+      const totalCases = areaDiseases.reduce((sum, d) => sum + d.cases, 0)
+      const hasHighRiskDisease = areaDiseases.some(d => ['Malaria', 'Leptospirosis'].includes(d.name))
+      
+      let riskLevel = 'Low'
+      if (totalCases > 100 || hasHighRiskDisease) riskLevel = 'High'
+      else if (totalCases > 50) riskLevel = 'Moderate'
+      
+      diseaseAreas.push({
+        id: `disease_${i + 1}`,
+        coordinates,
+        diseases: areaDiseases,
+        totalCases,
+        riskLevel,
+        area: `${selectedArea.value?.name || 'Area'} - District ${i + 1}`,
+        reportedDate: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString(),
+        primaryDisease: areaDiseases[0].name,
+        affectedPopulation: Math.floor(totalCases * (2 + Math.random() * 8))
+      })
+    }
+    
+    const result = {
+      success: true,
+      message: "Dummy disease areas data generated",
+      data: diseaseAreas,
+      totalAreas: diseaseAreas.length,
+      summary: {
+        totalCases: diseaseAreas.reduce((sum, area) => sum + area.totalCases, 0),
+        highRiskAreas: diseaseAreas.filter(area => area.riskLevel === 'High').length,
+        diseasesFound: [...new Set(diseaseAreas.flatMap(area => area.diseases.map(d => d.name)))]
+      },
+      timestamp: new Date().toISOString()
+    }
+    
+    console.log('Generated disease areas:', result)
+    diseaseAreasData.value = result
+    addDiseaseChloroplethToMap(result.data)
+  } catch (error) {
+    console.error('Error generating disease areas:', error)
+  } finally {
+    isLoadingDiseaseAreas.value = false
+  }
+}
+
+// Disease color mapping (5 colors for different risk levels and diseases)
+const getDiseaseColor = (area: any) => {
+  if (area.riskLevel === 'High') return '#d32f2f' // Red
+  if (area.totalCases > 50) return '#f57c00' // Orange
+  if (area.diseases.some((d: any) => d.name === 'Malaria')) return '#7b1fa2' // Purple
+  if (area.diseases.some((d: any) => d.name === 'Leptospirosis')) return '#1976d2' // Blue
+  return '#388e3c' // Green for low risk
+}
+
+const addFloodDotsToMap = (floodData: any[]) => {
+  console.log('🗺️ Adding flood dots to map:', floodData)
+  console.log('Map object:', map.value)
+  
+  if (!map.value) {
+    console.error('❌ Map not available for flood visualization')
+    return
+  }
+
+  try {
+    // Remove existing flood layer if it exists
+    if (map.value.getLayer('flood-dots')) {
+      console.log('🧹 Removing existing flood-dots layer')
+      map.value.removeLayer('flood-dots')
+    }
+    if (map.value.getSource('flood-data')) {
+      console.log('🧹 Removing existing flood-data source')
+      map.value.removeSource('flood-data')
+    }
+
+    // Create GeoJSON for flood dots
+    const floodGeoJSON = {
+      type: 'FeatureCollection' as const,
+      features: floodData.map((flood: any) => ({
+        type: 'Feature' as const,
+        properties: {
+          severity: flood.severity,
+          waterLevel: flood.waterLevel,
+          affectedPopulation: flood.affectedPopulation,
+          area: flood.area,
+          risk: flood.risk
+        },
+        geometry: {
+          type: 'Point' as const,
+          coordinates: flood.coordinates
+        }
+      }))
+    }
+
+    console.log('📊 Created flood GeoJSON:', floodGeoJSON)
+
+    // Add source and layer
+    map.value.addSource('flood-data', {
+      type: 'geojson',
+      data: floodGeoJSON
+    })
+
+    console.log('✅ Added flood data source')
+
+    map.value.addLayer({
+      id: 'flood-dots',
+      type: 'circle',
+      source: 'flood-data',
+      paint: {
+        'circle-radius': [
+          'case',
+          ['==', ['get', 'severity'], 'Critical'], 25,  // Smaller dots
+          ['==', ['get', 'severity'], 'High'], 20,
+          ['==', ['get', 'severity'], 'Moderate'], 16,
+          12  // Minimum size for visibility
+        ],
+        'circle-color': [
+          'case',
+          ['==', ['get', 'severity'], 'Critical'], '#8B0000',    // Dark red
+          ['==', ['get', 'severity'], 'High'], '#DC143C',         // Crimson
+          ['==', ['get', 'severity'], 'Moderate'], '#FF6347',     // Tomato
+          '#4169E1'  // Royal blue for low severity
+        ],
+        'circle-opacity': 0.9,  // More opaque
+        'circle-stroke-width': 3,  // Thicker border
+        'circle-stroke-color': '#ffffff'
+      }
+    })
+
+    console.log('✅ Added flood dots layer to map')
+
+    // Add click handler for flood dots
+    map.value.on('click', 'flood-dots', (e: any) => {
+      const properties = e.features[0].properties
+      const popup = new Popup()
+        .setLngLat(e.lngLat)
+        .setHTML(`
+          <div style="padding: 8px;">
+            <h4>🌊 Flood Alert</h4>
+            <p><strong>Area:</strong> ${properties.area}</p>
+            <p><strong>Severity:</strong> ${properties.severity}</p>
+            <p><strong>Water Level:</strong> ${properties.waterLevel}m</p>
+            <p><strong>Affected:</strong> ${properties.affectedPopulation} people</p>
+            <p><strong>Risk:</strong> ${properties.risk}</p>
+          </div>
+        `)
+      
+      if (map.value) {
+        popup.addTo(map.value)
+      }
+    })
+
+    map.value.on('mouseenter', 'flood-dots', () => {
+      if (map.value) {
+        map.value.getCanvas().style.cursor = 'pointer'
+      }
+    })
+
+    map.value.on('mouseleave', 'flood-dots', () => {
+      if (map.value) {
+        map.value.getCanvas().style.cursor = ''
+      }
+    })
+
+    console.log('✅ Added flood dots event handlers')
+  } catch (error) {
+    console.error('❌ Error adding flood dots to map:', error)
+  }
+}
+
+const addDiseaseChloroplethToMap = (diseaseData: any[]) => {
+  console.log('🦠 Adding disease areas to map:', diseaseData)
+  console.log('Map object:', map.value)
+  
+  if (!map.value) {
+    console.error('❌ Map not available for disease visualization')
+    return
+  }
+
+  try {
+    // Remove existing disease layer if it exists
+    if (map.value.getLayer('disease-areas')) {
+      console.log('🧹 Removing existing disease-areas layer')
+      map.value.removeLayer('disease-areas')
+    }
+    if (map.value.getSource('disease-data')) {
+      console.log('🧹 Removing existing disease-data source')
+      map.value.removeSource('disease-data')
+    }
+
+    // Create GeoJSON for disease areas (as circles that can overlap)
+    const diseaseGeoJSON = {
+      type: 'FeatureCollection' as const,
+      features: diseaseData.map((disease: any) => ({
+        type: 'Feature' as const,
+        properties: {
+          diseases: JSON.stringify(disease.diseases),
+          totalCases: disease.totalCases,
+          riskLevel: disease.riskLevel,
+          area: disease.area,
+          primaryDisease: disease.primaryDisease,
+          affectedPopulation: disease.affectedPopulation
+        },
+        geometry: {
+          type: 'Point' as const,
+          coordinates: disease.coordinates
+        }
+      }))
+    }
+
+    console.log('📊 Created disease GeoJSON:', diseaseGeoJSON)
+
+    // Add source and layer
+    map.value.addSource('disease-data', {
+      type: 'geojson',
+      data: diseaseGeoJSON
+    })
+
+    console.log('✅ Added disease data source')
+
+    map.value.addLayer({
+      id: 'disease-areas',
+      type: 'circle',
+      source: 'disease-data',
+      paint: {
+        'circle-radius': [
+          'interpolate',
+          ['linear'],
+          ['get', 'totalCases'],
+          10, 18,  // 10 cases = 18px radius (smaller)
+          50, 24,  // 50 cases = 24px radius
+          100, 30, // 100 cases = 30px radius
+          200, 38  // 200+ cases = 38px radius
+        ],
+        'circle-color': [
+          'case',
+          ['==', ['get', 'riskLevel'], 'High'], '#FF1493',       // Deep pink
+          ['>', ['get', 'totalCases'], 50], '#FF8C00',           // Dark orange
+          ['any', 
+            ['in', 'Malaria', ['get', 'primaryDisease']], 
+            ['in', 'malaria', ['get', 'primaryDisease']]
+          ], '#9370DB',                                          // Medium purple
+          ['any', 
+            ['in', 'Leptospirosis', ['get', 'primaryDisease']], 
+            ['in', 'leptospirosis', ['get', 'primaryDisease']]
+          ], '#00CED1',                                          // Dark turquoise
+          '#32CD32'                                              // Lime green for low risk
+        ],
+        'circle-opacity': 0.7,  // More visible
+        'circle-stroke-width': 2,  // Thicker border
+        'circle-stroke-color': '#ffffff'
+      }
+    })
+
+    console.log('✅ Added disease areas layer to map')
+
+    // Add click handler for disease areas
+    map.value.on('click', 'disease-areas', (e: any) => {
+      const properties = e.features[0].properties
+      const diseases = JSON.parse(properties.diseases || '[]')
+      
+      const diseaseList = diseases.map((d: any) => 
+        `<li><strong>${d.name}:</strong> ${d.cases} cases (${d.severity})</li>`
+      ).join('')
+
+      const popup = new Popup()
+        .setLngLat(e.lngLat)
+        .setHTML(`
+          <div style="padding: 8px; min-width: 200px;">
+            <h4>🦠 Disease Outbreak</h4>
+            <p><strong>Area:</strong> ${properties.area}</p>
+            <p><strong>Risk Level:</strong> ${properties.riskLevel}</p>
+            <p><strong>Total Cases:</strong> ${properties.totalCases}</p>
+            <p><strong>Affected Population:</strong> ${properties.affectedPopulation}</p>
+            <p><strong>Diseases:</strong></p>
+            <ul style="margin: 4px 0; padding-left: 16px;">
+              ${diseaseList}
+            </ul>
+          </div>
+        `)
+      
+      if (map.value) {
+        popup.addTo(map.value)
+      }
+    })
+
+    map.value.on('mouseenter', 'disease-areas', () => {
+      if (map.value) {
+        map.value.getCanvas().style.cursor = 'pointer'
+      }
+    })
+
+    map.value.on('mouseleave', 'disease-areas', () => {
+      if (map.value) {
+        map.value.getCanvas().style.cursor = ''
+      }
+    })
+
+    console.log('✅ Added disease areas event handlers')
+  } catch (error) {
+    console.error('❌ Error adding disease areas to map:', error)
+  }
+}
+
+// Watch for data changes to update map
+watch(floodedAreasData, (newData) => {
+  if (newData?.data) {
+    addFloodDotsToMap(newData.data)
+  }
+})
+
+watch(diseaseAreasData, (newData) => {
+  if (newData?.data) {
+    addDiseaseChloroplethToMap(newData.data)
+  }
+})
+
+const generateAnalysisPrompt = () => {
+  const floodData = floodedAreasData.value?.data || []
+  const diseaseData = diseaseAreasData.value?.data || []
+  
+  // Calculate overlapping areas (areas within ~1km of each other)
+  const overlapThreshold = 0.01 // ~1.1 km at equator
+  const overlappingAreas = []
+  
+  floodData.forEach((flood: any) => {
+    diseaseData.forEach((disease: any) => {
+      const distance = Math.sqrt(
+        Math.pow(flood.coordinates[0] - disease.coordinates[0], 2) + 
+        Math.pow(flood.coordinates[1] - disease.coordinates[1], 2)
+      )
+      
+      if (distance <= overlapThreshold) {
+        overlappingAreas.push({
+          floodId: flood.id,
+          diseaseId: disease.id,
+          floodSeverity: flood.severity,
+          diseaseRisk: disease.riskLevel,
+          diseases: disease.diseases.map((d: any) => d.name),
+          totalCases: disease.totalCases,
+          affectedPopulation: flood.affectedPopulation + disease.affectedPopulation,
+          distance: (distance * 111).toFixed(2) // Convert to km
+        })
+      }
+    })
+  })
+  
+  const prompt = `Given the following GIS data from ${areaDetails.value?.name || 'the selected area'}, analyze the correlation between flooding and disease outbreaks and provide forecasting insights:
+
+GEOGRAPHIC CONTEXT:
+- Selected Area: ${areaDetails.value?.name || 'Unknown'}
+- Area Type: ${areaDetails.value?.type || 'Unknown'}
+- Province: ${areaDetails.value?.province || 'Unknown'}
+- Region: ${areaDetails.value?.region || 'Unknown'}
+
+FLOODING DATA WITH COORDINATES:
+- Total flooded areas: ${floodData.length}
+- Critical flood zones: ${floodData.filter((f: any) => f.severity === 'Critical').length}
+- Average water level: ${floodData.length > 0 ? (floodData.reduce((sum: number, f: any) => sum + f.waterLevel, 0) / floodData.length).toFixed(2) : 0}m
+- Total affected population (flooding): ${floodData.reduce((sum: number, f: any) => sum + f.affectedPopulation, 0).toLocaleString()}
+
+Detailed Flood Coordinates:
+${floodData.map((f: any) => `  • ${f.area}: [${f.coordinates[0].toFixed(6)}, ${f.coordinates[1].toFixed(6)}] - ${f.severity} severity, ${f.waterLevel}m water level, ${f.affectedPopulation} people affected`).join('\n')}
+
+DISEASE DATA WITH COORDINATES:
+- Total disease outbreak areas: ${diseaseData.length}
+- High-risk disease areas: ${diseaseData.filter((d: any) => d.riskLevel === 'High').length}
+- Total disease cases: ${diseaseData.reduce((sum: number, d: any) => sum + d.totalCases, 0)}
+- Primary diseases detected: ${diseaseAreasData.value?.summary?.diseasesFound?.join(', ') || 'None'}
+- Total affected population (diseases): ${diseaseData.reduce((sum: number, d: any) => sum + d.affectedPopulation, 0).toLocaleString()}
+
+Detailed Disease Coordinates:
+${diseaseData.map((d: any) => `  • ${d.area}: [${d.coordinates[0].toFixed(6)}, ${d.coordinates[1].toFixed(6)}] - ${d.riskLevel} risk, ${d.totalCases} cases
+    Diseases: ${d.diseases.map((disease: any) => `${disease.name} (${disease.cases} cases, ${disease.severity})`).join(', ')}`).join('\n')}
+
+SPATIAL OVERLAP ANALYSIS:
+- Areas with potential flood-disease correlation: ${overlappingAreas.length}
+- Areas within 1km proximity: ${overlappingAreas.length > 0 ? 'YES' : 'NO'}
+
+${overlappingAreas.length > 0 ? `Overlapping Areas Details:
+${overlappingAreas.map((overlap: any) => `  • Flood zone (${overlap.floodSeverity}) & Disease area (${overlap.diseaseRisk} risk) - Distance: ${overlap.distance}km
+    Diseases in proximity: ${overlap.diseases.join(', ')} (${overlap.totalCases} total cases)
+    Combined affected population: ${overlap.affectedPopulation.toLocaleString()}`).join('\n')}` : 'No significant spatial overlap detected between flood and disease areas.'}
+
+GEOSPATIAL DATA FOR AI ANALYSIS:
+Selected Area Bounds: ${selectedArea.value?.geojson?.geometry ? JSON.stringify(selectedArea.value.geojson.geometry) : 'Not available'}
+
+Flood Points GeoJSON:
+{
+  "type": "FeatureCollection",
+  "features": [
+${floodData.map((f: any) => `    {
+      "type": "Feature",
+      "properties": {
+        "id": "${f.id}",
+        "severity": "${f.severity}",
+        "waterLevel": ${f.waterLevel},
+        "affectedPopulation": ${f.affectedPopulation},
+        "risk": "${f.risk}"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [${f.coordinates[0]}, ${f.coordinates[1]}]
+      }
+    }`).join(',\n')}
+  ]
+}
+
+Disease Points GeoJSON:
+{
+  "type": "FeatureCollection",
+  "features": [
+${diseaseData.map((d: any) => `    {
+      "type": "Feature",
+      "properties": {
+        "id": "${d.id}",
+        "riskLevel": "${d.riskLevel}",
+        "totalCases": ${d.totalCases},
+        "diseases": ${JSON.stringify(d.diseases.map((disease: any) => disease.name))},
+        "affectedPopulation": ${d.affectedPopulation}
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [${d.coordinates[0]}, ${d.coordinates[1]}]
+      }
+    }`).join(',\n')}
+  ]
+}
+
+CORRELATION ANALYSIS REQUEST:
+1. Spatial Analysis: What spatial patterns do you observe between flood-prone coordinates and disease outbreak coordinates?
+2. Disease-Flood Correlation: Which diseases are most likely to emerge following flood events based on the proximity data?
+3. Risk Zones: Identify high-risk zones where flood and disease data overlap or are in close proximity.
+4. Preventive Measures: What preventive measures should be prioritized based on the spatial distribution?
+5. Forecasting: Based on current spatial trends and overlap patterns, what is the 30-day forecast for disease spread?
+6. Priority Areas: Which specific coordinates/areas require immediate public health intervention based on the overlap analysis?
+7. Water-borne Disease Risk: Analyze the correlation between water levels and specific diseases (especially Leptospirosis and waterborne diseases).
+
+RESPONSE FORMAT REQUIREMENTS:
+Please provide your analysis as a comprehensive, well-structured MARKDOWN document with the following sections:
+
+# GIS Analysis Report: Flood-Disease Correlation Study
+
+## Executive Summary
+(Brief overview of key findings and recommendations)
+
+## Spatial Pattern Analysis
+(Detailed analysis of coordinate patterns and clustering)
+
+## Disease-Flood Correlation Matrix
+(Table showing correlation strength between flood severity and disease types)
+
+## High-Risk Zone Identification
+| Zone | Coordinates | Risk Level | Intervention Priority |
+|------|-------------|------------|---------------------|
+| ... | ... | ... | ... |
+
+## Preventive Action Plan
+### Immediate Actions (0-7 days)
+- [ ] Action item 1
+- [ ] Action item 2
+
+### Short-term Actions (1-4 weeks)
+- [ ] Action item 1
+- [ ] Action item 2
+
+### Long-term Strategic Actions (1-6 months)
+- [ ] Action item 1
+- [ ] Action item 2
+
+## 30-Day Disease Spread Forecast
+(Include probability matrices and risk assessments)
+
+## Resource Allocation Recommendations
+### Medical Resources
+### Infrastructure Improvements
+### Monitoring Systems
+
+## Conclusion and Next Steps
+
+Please format your response with proper markdown headings, tables, lists, and emphasis. Include actionable insights for disaster preparedness and public health response with specific geographic references to the coordinate data provided.`
+  
+  analysisPrompt.value = prompt
+  console.log('=== GENERATED ENHANCED ANALYSIS PROMPT ===')
+  console.log(prompt)
+  console.log('================================')
+}
+
+// AI Analysis and PDF Generation
+const aiAnalysisResponse = ref('')
+const isGeneratingAnalysis = ref(false)
+const analysisError = ref('')
+
+const generateAIAnalysis = async () => {
+  try {
+    isGeneratingAnalysis.value = true
+    analysisError.value = ''
+    aiAnalysisResponse.value = ''
+    
+    // Generate the analysis prompt first
+    generateAnalysisPrompt()
+    
+    if (!analysisPrompt.value) {
+      throw new Error('No analysis prompt generated')
+    }
+    
+    console.log('🤖 Sending request to AI bot for analysis and PDF generation...')
+    
+    // Prepare form data for the AI bot
+    const formData = new FormData()
+    formData.append('message', analysisPrompt.value)
+    
+    // Call the AI bot analyze-and-generate-pdf endpoint
+    const response = await fetch('http://localhost:8000/api/analyze-and-generate-pdf/', {
+      method: 'POST',
+      body: formData
+    })
+    
+    if (!response.ok) {
+      throw new Error(`AI service error: ${response.status}`)
+    }
+    
+    // Check if response is PDF (direct download) or JSON
+    const contentType = response.headers.get('content-type')
+    
+    if (contentType && contentType.includes('application/pdf')) {
+      // Handle PDF download
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      
+      // Get filename from Content-Disposition header or create default
+      const contentDisposition = response.headers.get('content-disposition')
+      let filename = `gis_analysis_report_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.pdf`
+      
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="([^"]+)"/)
+        if (filenameMatch) {
+          filename = filenameMatch[1]
+        }
+      }
+      
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      
+      aiAnalysisResponse.value = 'PDF report generated and downloaded successfully!'
+      console.log('✅ AI Analysis PDF downloaded successfully')
+    } else {
+      // Handle JSON response (fallback)
+      const data = await response.json()
+      
+      if (data.response) {
+        aiAnalysisResponse.value = data.response
+        console.log('✅ AI Analysis completed successfully')
+      } else {
+        throw new Error('No response from AI service')
+      }
+    }
+    
+  } catch (error: any) {
+    console.error('❌ Error generating AI analysis:', error)
+    analysisError.value = error.message || 'Failed to generate AI analysis'
+  } finally {
+    isGeneratingAnalysis.value = false
+  }
+}
 
 const handleFloodAnalysis = async () => {
   if (!selectedArea.value) return
@@ -661,6 +1378,221 @@ const handleForestFireAnalysis = async () => {
           </div>
         </VCardText>
       </VCard>
+
+      <!-- Health & Disaster Risk Analysis -->
+      <VCard variant="outlined" class="mb-4">
+        <VCardTitle class="text-subtitle-1 pb-2">
+          🏥 Health & Disaster Risk Analysis
+        </VCardTitle>
+        <VCardText>
+          <div class="health-analysis-section">
+            <!-- Flooded Areas Data -->
+            <div class="data-section mb-3">
+              <div class="d-flex align-center justify-space-between mb-2">
+                <h4 class="text-subtitle-2">🌊 Flooded Areas Data</h4>
+                <VBtn
+                  :loading="isLoadingFloodedAreas"
+                  :disabled="isLoadingFloodedAreas"
+                  size="small"
+                  color="primary"
+                  variant="outlined"
+                  @click="fetchFloodedAreas"
+                >
+                  {{ isLoadingFloodedAreas ? 'Loading...' : 'Load Data' }}
+                </VBtn>
+              </div>
+              
+              <div v-if="floodedAreasData" class="data-summary">
+                <VAlert type="info" variant="tonal" density="compact" class="mb-2">
+                  <template #text>
+                    Found {{ floodedAreasData.totalAreas }} flooded areas with {{ floodedAreasData.data.filter((f: any) => f.severity === 'Critical').length }} critical zones
+                  </template>
+                </VAlert>
+                
+                <!-- Flood Legend -->
+                <div class="legend-section mb-3">
+                  <h5 class="text-subtitle-2 mb-2">🌊 Flood Severity Legend</h5>
+                  <div class="legend-grid">
+                    <div class="legend-item">
+                      <div class="legend-circle flood-critical"></div>
+                      <span class="legend-text">Critical (25px)</span>
+                    </div>
+                    <div class="legend-item">
+                      <div class="legend-circle flood-high"></div>
+                      <span class="legend-text">High (20px)</span>
+                    </div>
+                    <div class="legend-item">
+                      <div class="legend-circle flood-moderate"></div>
+                      <span class="legend-text">Moderate (16px)</span>
+                    </div>
+                    <div class="legend-item">
+                      <div class="legend-circle flood-low"></div>
+                      <span class="legend-text">Low (12px)</span>
+                    </div>
+                  </div>
+                </div>
+                
+                <div class="data-details">
+                  <div class="info-item">
+                    <span class="info-label">Total Areas:</span>
+                    <span class="info-value">{{ floodedAreasData.totalAreas }}</span>
+                  </div>
+                  <div class="info-item">
+                    <span class="info-label">Critical Zones:</span>
+                    <span class="info-value">{{ floodedAreasData.data.filter((f: any) => f.severity === 'Critical').length }}</span>
+                  </div>
+                  <div class="info-item">
+                    <span class="info-label">Affected Population:</span>
+                    <span class="info-value">{{ floodedAreasData.data.reduce((sum: number, f: any) => sum + f.affectedPopulation, 0).toLocaleString() }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Disease Areas Data -->
+            <div class="data-section mb-3">
+              <div class="d-flex align-center justify-space-between mb-2">
+                <h4 class="text-subtitle-2">🦠 Disease Areas Data</h4>
+                <VBtn
+                  :loading="isLoadingDiseaseAreas"
+                  :disabled="isLoadingDiseaseAreas"
+                  size="small"
+                  color="orange"
+                  variant="outlined"
+                  @click="fetchDiseaseAreas"
+                >
+                  {{ isLoadingDiseaseAreas ? 'Loading...' : 'Load Data' }}
+                </VBtn>
+              </div>
+              
+              <div v-if="diseaseAreasData" class="data-summary">
+                <VAlert type="warning" variant="tonal" density="compact" class="mb-2">
+                  <template #text>
+                    Found {{ diseaseAreasData.totalAreas }} disease outbreak areas with {{ diseaseAreasData.summary.totalCases }} total cases
+                  </template>
+                </VAlert>
+                
+                <!-- Disease Legend -->
+                <div class="legend-section mb-3">
+                  <h5 class="text-subtitle-2 mb-2">🦠 Disease Risk Legend</h5>
+                  <div class="legend-grid">
+                    <div class="legend-item">
+                      <div class="legend-circle disease-high"></div>
+                      <span class="legend-text">High Risk (18px)</span>
+                    </div>
+                    <div class="legend-item">
+                      <div class="legend-circle disease-moderate"></div>
+                      <span class="legend-text">Moderate Risk (24px)</span>
+                    </div>
+                    <div class="legend-item">
+                      <div class="legend-circle disease-malaria"></div>
+                      <span class="legend-text">Malaria Risk (30px)</span>
+                    </div>
+                    <div class="legend-item">
+                      <div class="legend-circle disease-leptospirosis"></div>
+                      <span class="legend-text">Leptospirosis Risk (38px)</span>
+                    </div>
+                    <div class="legend-item">
+                      <div class="legend-circle disease-low"></div>
+                      <span class="legend-text">Low Risk (18px)</span>
+                    </div>
+                  </div>
+                  <div class="legend-note mt-2">
+                    <small class="text-caption">Circle size varies: 18px (10 cases) to 38px (200+ cases)</small>
+                  </div>
+                </div>
+                
+                <div class="data-details">
+                  <div class="info-item">
+                    <span class="info-label">Outbreak Areas:</span>
+                    <span class="info-value">{{ diseaseAreasData.totalAreas }}</span>
+                  </div>
+                  <div class="info-item">
+                    <span class="info-label">Total Cases:</span>
+                    <span class="info-value">{{ diseaseAreasData.summary.totalCases }}</span>
+                  </div>
+                  <div class="info-item">
+                    <span class="info-label">High-Risk Areas:</span>
+                    <span class="info-value">{{ diseaseAreasData.summary.highRiskAreas }}</span>
+                  </div>
+                  <div class="info-item">
+                    <span class="info-label">Diseases Found:</span>
+                    <span class="info-value">{{ diseaseAreasData.summary.diseasesFound.join(', ') }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- AI Analysis Section -->
+            <VDivider class="mb-3" />
+            
+            <div class="d-flex gap-2 mb-3">
+              <VBtn
+                :disabled="!floodedAreasData || !diseaseAreasData || isGeneratingAnalysis"
+                :loading="isGeneratingAnalysis"
+                color="primary"
+                variant="flat"
+                block
+                @click="generateAIAnalysis"
+              >
+                <VIcon start>mdi-robot</VIcon>
+                {{ isGeneratingAnalysis ? 'Generating Analysis & PDF...' : '🤖 Generate AI Analysis & Download PDF' }}
+              </VBtn>
+            </div>
+
+            <!-- Analysis Error -->
+            <VAlert v-if="analysisError" type="error" variant="tonal" density="compact" class="mb-3">
+              <template #text>
+                {{ analysisError }}
+              </template>
+            </VAlert>
+
+            <!-- AI Analysis Response -->
+            <div v-if="aiAnalysisResponse" class="ai-analysis-response mt-3">
+              <VAlert type="success" variant="tonal" density="compact" class="mb-3">
+                <template #text>
+                  ✅ AI Analysis completed! The markdown analysis is displayed below and can be exported as PDF.
+                </template>
+              </VAlert>
+              
+              <VExpansionPanels variant="accordion">
+                <VExpansionPanel>
+                  <VExpansionPanelTitle>
+                    🤖 AI Analysis Results (Markdown)
+                  </VExpansionPanelTitle>
+                  <VExpansionPanelText>
+                    <div class="analysis-content">
+                      <pre style="white-space: pre-wrap; font-family: 'Segoe UI', sans-serif; font-size: 14px; line-height: 1.6;">{{ aiAnalysisResponse }}</pre>
+                    </div>
+                  </VExpansionPanelText>
+                </VExpansionPanel>
+              </VExpansionPanels>
+            </div>
+
+            <!-- Legacy: Analysis Prompt Display (for debugging) -->
+            <div v-if="analysisPrompt && !aiAnalysisResponse" class="analysis-prompt mt-3">
+              <VAlert type="info" variant="tonal" density="compact">
+                <template #text>
+                  Analysis prompt generated! Use the "Generate AI Analysis" button to get AI insights.
+                </template>
+              </VAlert>
+              
+              <VExpansionPanels class="mt-2" variant="accordion">
+                <VExpansionPanel>
+                  <VExpansionPanelTitle>
+                    📋 View Generated Prompt (Debug)
+                  </VExpansionPanelTitle>
+                  <VExpansionPanelText>
+                    <div class="prompt-display">
+                      <pre>{{ analysisPrompt }}</pre>
+                    </div>
+                  </VExpansionPanelText>
+                </VExpansionPanel>
+              </VExpansionPanels>
+            </div>
+          </div>
+        </VCardText>
+      </VCard>
     </div>
   </VSheet>
 </template>
@@ -876,5 +1808,131 @@ const handleForestFireAnalysis = async () => {
   padding: 12px;
   border-radius: 6px;
   border: 1px solid #badbcc;
+}
+
+/* Health Analysis Styles */
+.health-analysis-section {
+  width: 100%;
+}
+
+.data-section {
+  background-color: #f8f9fa;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+}
+
+.data-summary {
+  margin-top: 8px;
+}
+
+.data-details .info-item {
+  padding: 4px 0;
+  font-size: 13px;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.data-details .info-item:last-child {
+  border-bottom: none;
+}
+
+.analysis-prompt {
+  background-color: #f8f9fa;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+}
+
+.prompt-display {
+  background-color: #f1f3f4;
+  padding: 12px;
+  border-radius: 4px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.prompt-display pre {
+  white-space: pre-wrap;
+  font-size: 11px;
+  line-height: 1.4;
+  margin: 0;
+  color: #333;
+}
+
+/* Legend Styles */
+.legend-section {
+  background-color: #ffffff;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+}
+
+.legend-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.legend-circle {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid #ffffff;
+  flex-shrink: 0;
+}
+
+.legend-text {
+  font-size: 12px;
+  font-weight: 500;
+  color: #333;
+}
+
+.legend-note {
+  text-align: center;
+  color: #666;
+}
+
+/* Flood Legend Colors */
+.flood-critical {
+  background-color: #8B0000;
+}
+
+.flood-high {
+  background-color: #DC143C;
+}
+
+.flood-moderate {
+  background-color: #FF6347;
+}
+
+.flood-low {
+  background-color: #4169E1;
+}
+
+/* Disease Legend Colors */
+.disease-high {
+  background-color: #FF1493;
+}
+
+.disease-moderate {
+  background-color: #FF8C00;
+}
+
+.disease-malaria {
+  background-color: #9370DB;
+}
+
+.disease-leptospirosis {
+  background-color: #00CED1;
+}
+
+.disease-low {
+  background-color: #32CD32;
 }
 </style>
