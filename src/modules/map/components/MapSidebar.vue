@@ -178,7 +178,7 @@ const handleAddItem = () => {
         </div>
         <VSpacer />
         <VDivider />
-        <div class="">
+        <!-- <div class="">
           <VList class="bottom-nav">
             <VListItem
               to="/dashboard"
@@ -191,7 +191,7 @@ const handleAddItem = () => {
               </div>
             </VListItem>
           </VList>
-        </div>
+        </div> -->
       </div>
       <VDivider v-if="showAdditionalContent" :vertical="true" />
       <div v-if="showAdditionalContent" class="sidebar-additional-content overflow-hidden">
