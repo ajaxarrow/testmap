@@ -122,9 +122,13 @@ const handleAddItem = () => {
     <div class="d-flex">
       <div class="sidebar-main-container d-flex flex-column">
         <div class="sidebar-header">
-          <VRow justify="center" align="center" class="mt-5 mb-4">
+          <VRow justify="center" align="center" class="mt-5 mb-4" >
             <!-- Logo placeholder -->
-            <VIcon size="48" color="primary">mdi-map</VIcon>
+            <!-- <VIcon size="48" color="primary">mdi-map</VIcon>
+              -->
+
+            <!-- when clicked redirect to landing page -->
+            <img src="@/assets/geosense.svg" alt="Logo" class="logo" style="width: 60px; cursor: pointer;" @click="$router.push('/')">
           </VRow>
         </div>
         <VDivider />

@@ -1,7 +1,9 @@
 const mapRoutes = [
     {
         path: '/',
-        redirect: '/map'
+        name: 'LandingPage',
+        //@ts-ignore
+        component: () => import('@/views/LandingPage.vue'),
     },
     {
         path: '/map',
