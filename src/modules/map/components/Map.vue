@@ -71,13 +71,6 @@ watch(currentStyle, (newStyle) => {
 onMounted( async() => {
     loading.value = true;
     await initMap();
-
-    // @ts-ignore
-    map.value.addControl(draw);
-    ['draw.create', 'draw.update', 'draw.delete'].forEach((eventName) => {
-      //@ts-ignore
-      map.value.on(eventName, handleDrawEvent);
-    });
     // @ts-ignore
     map.value?.on('style.load', () => {
         // setupAreas(municipitiesData as AreaData[]);
