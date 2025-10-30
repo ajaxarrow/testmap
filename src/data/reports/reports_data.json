@@ -1,0 +1,257 @@
+[
+  {
+    "id": "report_001",
+    "title": "Flash Flood Risk in Residential Area",
+    "description": "Heavy rainfall causing water accumulation near creek. Water level rising rapidly, threatening nearby homes. Residents need immediate evacuation assistance.",
+    "location": {
+      "latitude": 8.1448,
+      "longitude": 125.1197
+    },
+    "geojson": {
+      "barangayId": "888d5f41-5c7c-431d-8972-9f7018d7a3a1"
+    },
+    "status": "Pending",
+    "createdAt": "2025-10-28T08:30:00Z",
+    "updatedAt": "2025-10-28T08:30:00Z",
+    "attachments": ["flood_casisang_1.jpg", "flood_casisang_2.jpg"],
+    "citizen": "Juan Dela Cruz"
+  },
+  {
+    "id": "report_002",
+    "title": "Illegal Logging Activity Detected",
+    "description": "Suspicious tree cutting activity observed in forested area. Multiple trees have been cut down illegally, increasing flood and landslide risk.",
+    "location": {
+      "latitude": 8.1435,
+      "longitude": 125.1108
+    },
+    "geojson": {
+      "barangayId": "888d5f41-5c7c-431d-8972-9f7018d7a3a1"
+    },
+    "status": "In Progress",
+    "createdAt": "2025-10-25T14:20:00Z",
+    "updatedAt": "2025-10-27T10:15:00Z",
+    "attachments": ["illegal_logging_casisang.jpg"],
+    "citizen": "Maria Santos"
+  },
+  {
+    "id": "report_003",
+    "title": "River Overflow - Flood Warning",
+    "description": "River water level critically high after continuous rainfall. Nearby agricultural lands and homes at risk of flooding. Immediate monitoring required.",
+    "location": {
+      "latitude": 8.0725,
+      "longitude": 125.1385
+    },
+    "geojson": {
+      "barangayId": "d973d103-cf21-4ac9-a249-d4ae48129338"
+    },
+    "status": "Resolved",
+    "createdAt": "2025-10-20T09:45:00Z",
+    "updatedAt": "2025-10-26T16:30:00Z",
+    "attachments": [],
+    "citizen": "Pedro Reyes"
+  },
+  {
+    "id": "report_004",
+    "title": "Forest Fire Smoke Detected",
+    "description": "Smoke spotted in forested hillside area. Possible forest fire or slash-and-burn activity. Fire spreading risk due to dry season conditions.",
+    "location": {
+      "latitude": 8.1685,
+      "longitude": 125.1445
+    },
+    "geojson": {
+      "barangayId": "c250aae8-c5bb-4e04-bfd6-a66a40f98e41"
+    },
+    "status": "In Progress",
+    "createdAt": "2025-10-26T11:00:00Z",
+    "updatedAt": "2025-10-28T09:20:00Z",
+    "attachments": ["forest_fire_bangcud_1.jpg", "forest_fire_bangcud_2.jpg", "forest_fire_bangcud_3.jpg"],
+    "citizen": "Ana Garcia"
+  },
+  {
+    "id": "report_005",
+    "title": "Drainage System Clogged - Flood Risk",
+    "description": "Main drainage canal blocked by debris and sediment. Heavy rain will cause immediate flooding in low-lying residential areas.",
+    "location": {
+      "latitude": 8.1452,
+      "longitude": 125.1155
+    },
+    "geojson": {
+      "barangayId": "888d5f41-5c7c-431d-8972-9f7018d7a3a1"
+    },
+    "status": "Pending",
+    "createdAt": "2025-10-29T07:15:00Z",
+    "updatedAt": "2025-10-29T07:15:00Z",
+    "attachments": ["drainage_clogged_casisang.jpg"],
+    "citizen": "Carlos Mendoza"
+  },
+  {
+    "id": "report_006",
+    "title": "Deforestation in Watershed Area",
+    "description": "Large-scale tree cutting observed in critical watershed zone. This will severely impact water retention and increase flood risk downstream.",
+    "location": {
+      "latitude": 8.0768,
+      "longitude": 125.1295
+    },
+    "geojson": {
+      "barangayId": "d973d103-cf21-4ac9-a249-d4ae48129338"
+    },
+    "status": "Pending",
+    "createdAt": "2025-10-27T13:40:00Z",
+    "updatedAt": "2025-10-27T13:40:00Z",
+    "attachments": ["deforestation_aglayan.jpg"],
+    "citizen": "Rosa Martinez"
+  },
+  {
+    "id": "report_007",
+    "title": "Wildfire Threat - Dry Vegetation",
+    "description": "Extremely dry grassland and vegetation posing high wildfire risk. Strong winds could spread fire rapidly to residential areas.",
+    "location": {
+      "latitude": 8.1722,
+      "longitude": 125.1398
+    },
+    "geojson": {
+      "barangayId": "c250aae8-c5bb-4e04-bfd6-a66a40f98e41"
+    },
+    "status": "In Progress",
+    "createdAt": "2025-10-24T15:30:00Z",
+    "updatedAt": "2025-10-26T11:45:00Z",
+    "attachments": [],
+    "citizen": "Miguel Santos"
+  },
+  {
+    "id": "report_008",
+    "title": "Flood Damage to Infrastructure",
+    "description": "Recent flooding damaged bridge and road access. Water erosion undermining bridge foundation, posing collapse risk during next heavy rain.",
+    "location": {
+      "latitude": 8.1588,
+      "longitude": 125.1245
+    },
+    "geojson": {
+      "barangayId": "c65307b4-66b8-4001-8baa-a06b5a2a8491"
+    },
+    "status": "Resolved",
+    "createdAt": "2025-10-22T06:20:00Z",
+    "updatedAt": "2025-10-25T14:00:00Z",
+    "attachments": ["flood_damage_dalwangan_1.jpg", "flood_damage_dalwangan_2.jpg"],
+    "citizen": "Elena Cruz"
+  },
+  {
+    "id": "report_009",
+    "title": "Landslide Risk After Heavy Rain",
+    "description": "Soil erosion and cracks appearing on hillside after deforestation. High risk of landslide threatening homes below during next rainfall.",
+    "location": {
+      "latitude": 8.1612,
+      "longitude": 125.1268
+    },
+    "geojson": {
+      "barangayId": "c65307b4-66b8-4001-8baa-a06b5a2a8491"
+    },
+    "status": "Pending",
+    "createdAt": "2025-10-29T22:30:00Z",
+    "updatedAt": "2025-10-29T22:30:00Z",
+    "attachments": [],
+    "citizen": "Roberto Diaz"
+  },
+  {
+    "id": "report_010",
+    "title": "Flash Flood in Agricultural Area",
+    "description": "Sudden flooding destroying crops and farmland. Water from upland deforestation rushing down, no natural barriers to slow flow.",
+    "location": {
+      "latitude": 8.1825,
+      "longitude": 125.1188
+    },
+    "geojson": {
+      "barangayId": "766ed754-c793-45c5-8f3e-c8b8675136f3"
+    },
+    "status": "Pending",
+    "createdAt": "2025-10-28T10:00:00Z",
+    "updatedAt": "2025-10-28T10:00:00Z",
+    "attachments": ["flash_flood_kalasungay.jpg"],
+    "citizen": "Carmen Lopez"
+  },
+  {
+    "id": "report_011",
+    "title": "Slash-and-Burn Agriculture Detected",
+    "description": "Farmers burning forest area for agriculture. Fire spreading uncontrolled, threatening nearby forest and increasing erosion risk.",
+    "location": {
+      "latitude": 8.0742,
+      "longitude": 125.1318
+    },
+    "geojson": {
+      "barangayId": "d973d103-cf21-4ac9-a249-d4ae48129338"
+    },
+    "status": "In Progress",
+    "createdAt": "2025-10-23T16:45:00Z",
+    "updatedAt": "2025-10-27T09:30:00Z",
+    "attachments": ["slash_burn_aglayan.jpg"],
+    "citizen": "Fernando Ramos"
+  },
+  {
+    "id": "report_012",
+    "title": "Creek Blockage Causing Flood",
+    "description": "Natural creek blocked by fallen trees and debris. Water backing up and flooding nearby homes. Urgent clearing needed.",
+    "location": {
+      "latitude": 8.1695,
+      "longitude": 125.1422
+    },
+    "geojson": {
+      "barangayId": "c250aae8-c5bb-4e04-bfd6-a66a40f98e41"
+    },
+    "status": "Resolved",
+    "createdAt": "2025-10-18T12:00:00Z",
+    "updatedAt": "2025-10-24T15:20:00Z",
+    "attachments": ["creek_blockage_bangcud.jpg"],
+    "citizen": "Linda Fernandez"
+  },
+  {
+    "id": "report_013",
+    "title": "Forest Fire Active - Evacuation Needed",
+    "description": "Active forest fire spreading rapidly due to strong winds. Multiple families need evacuation. Fire approaching residential zone.",
+    "location": {
+      "latitude": 8.1575,
+      "longitude": 125.1228
+    },
+    "geojson": {
+      "barangayId": "c65307b4-66b8-4001-8baa-a06b5a2a8491"
+    },
+    "status": "In Progress",
+    "createdAt": "2025-10-26T17:30:00Z",
+    "updatedAt": "2025-10-28T08:45:00Z",
+    "attachments": ["active_fire_dalwangan.jpg"],
+    "citizen": "Antonio Valdez"
+  },
+  {
+    "id": "report_014",
+    "title": "Riverbank Erosion - Flood Risk",
+    "description": "Severe riverbank erosion after illegal sand mining. River widening and threatening to flood nearby houses during heavy rain.",
+    "location": {
+      "latitude": 8.1468,
+      "longitude": 125.1182
+    },
+    "geojson": {
+      "barangayId": "888d5f41-5c7c-431d-8972-9f7018d7a3a1"
+    },
+    "status": "Pending",
+    "createdAt": "2025-10-29T14:20:00Z",
+    "updatedAt": "2025-10-29T14:20:00Z",
+    "attachments": ["erosion_casisang_1.jpg", "erosion_casisang_2.jpg"],
+    "citizen": "Sofia Ramirez"
+  },
+  {
+    "id": "report_015",
+    "title": "Illegal Timber Harvesting",
+    "description": "Commercial logging operation without permit. Large trees being cut in protected forest area, severe environmental damage and flood risk.",
+    "location": {
+      "latitude": 8.1792,
+      "longitude": 125.1215
+    },
+    "geojson": {
+      "barangayId": "766ed754-c793-45c5-8f3e-c8b8675136f3"
+    },
+    "status": "In Progress",
+    "createdAt": "2025-10-25T08:00:00Z",
+    "updatedAt": "2025-10-28T13:15:00Z",
+    "attachments": ["illegal_timber_kalasungay.jpg"],
+    "citizen": "Gabriel Torres"
+  }
+]

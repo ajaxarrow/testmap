@@ -9,7 +9,9 @@ import {
   PhTree,
 } from "@phosphor-icons/vue";
 
-import { ref, computed, defineComponent, markRaw } from 'vue';
+import { ref, computed, defineComponent, markRaw, watch } from 'vue';
+import { useMapStore } from '../stores/map.store';
+import { useMapCitizenReportsStore } from '../stores/mapCitizenReports.store';
 import MapAreasHeader from "./Areas/MapAreasHeader.vue";
 import MapLayersHeader from "./Layers/MapLayersHeader.vue";
 import MapMonitoringHeader from "./Monitoring/MapMonitoringHeader.vue";
@@ -70,6 +72,9 @@ const navLinks = [
   },
 ];
 
+const { map } = useMapStore();
+const { addReportMarkers, removeReportMarkers } = useMapCitizenReportsStore();
+
 const assignContent = (headerComponent: CustomComponent, mainContentComponent: CustomComponent, activeNavTitle: string) => {
   if (activeNav.value === activeNavTitle) {
     showAdditionalContent.value = false;
@@ -83,6 +88,27 @@ const assignContent = (headerComponent: CustomComponent, mainContentComponent: C
   header.value = headerComponent;
   mainContent.value = mainContentComponent;
 };
+
+// Watch activeNav to show/hide report markers
+watch(activeNav, (newNav, oldNav) => {
+  if (!map.value) return;
+  
+  // Show markers when Reports is active
+  if (newNav === 'Reports') {
+    setTimeout(() => {
+      if (map.value) {
+        addReportMarkers(map.value);
+        console.log('📍 Report markers shown');
+      }
+    }, 300);
+  }
+  
+  // Hide markers when leaving Reports
+  if (oldNav === 'Reports' && newNav !== 'Reports') {
+    removeReportMarkers();
+    console.log('📍 Report markers hidden');
+  }
+});
 
 // Dummy function for add button
 const handleAddItem = () => {
@@ -152,7 +178,7 @@ const handleAddItem = () => {
         </div>
         <VSpacer />
         <VDivider />
-        <div class="">
+        <!-- <div class="">
           <VList class="bottom-nav">
             <VListItem
               to="/dashboard"
@@ -165,7 +191,7 @@ const handleAddItem = () => {
               </div>
             </VListItem>
           </VList>
-        </div>
+        </div> -->
       </div>
       <VDivider v-if="showAdditionalContent" :vertical="true" />
       <div v-if="showAdditionalContent" class="sidebar-additional-content overflow-hidden">
