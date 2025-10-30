@@ -297,36 +297,53 @@ router.post("/analyze-illegal-logging", async (req: Request, res: Response) => {
   try {
     console.log("🪓 Starting illegal logging analysis...");
     const { geometry, startDate, endDate, areaName } = req.body;
-
+    
     if (!geometry) return res.status(400).json({ error: "Geometry is required" });
     if (!startDate || !endDate) return res.status(400).json({ error: "Start and end dates are required" });
-
+    
     const region = ee.Geometry(geometry);
     console.log(`📍 Area: ${areaName || "Unknown"} | 📅 ${startDate} to ${endDate}`);
-
-    // Hansen Global Forest Change dataset
-    const hansen = (ee as any).Image("UMD/hansen/global_forest_change_2022_v1_10");
+    
+    // Hansen Global Forest Change dataset (covers 2000-2024)
+    const hansen = (ee as any).Image("UMD/hansen/global_forest_change_2024_v1_12");
     const treeCover = hansen.select("treecover2000");
-    const lossYear = hansen.select("lossyear"); // 1 = 2001, 22 = 2022
-
-    // Calculate forest loss within the selected date range
+    const lossYear = hansen.select("lossyear"); // 1 = 2001, 24 = 2024
+    
     const startYear = new Date(startDate).getFullYear() - 2000;
     const endYear = new Date(endDate).getFullYear() - 2000;
     
-    // Validate year range (Hansen data goes from 2001-2022)
-    const validStartYear = Math.max(1, Math.min(22, startYear));
-    const validEndYear = Math.max(1, Math.min(22, endYear));
+    // Check if date range is outside dataset bounds (2001-2024)
+    if (endYear < 1 || startYear > 24) {
+      console.log(`⚠️ Date range outside dataset coverage (2001-2024). Returning empty data.`);
+      return res.json({
+        success: true,
+        area: areaName || "Unknown",
+        dateRange: `${startDate} to ${endDate}`,
+        forestLossData: { type: "FeatureCollection", features: [] },
+        metadata: {
+          dataset: "Hansen Global Forest Change (v1.12, 2024 update)",
+          datasetVersion: "2024_v1_12",
+          analysisYears: `${startYear + 2000}-${endYear + 2000}`,
+          dataAvailableThrough: "2024",
+          datasetCoverage: "2001-2024",
+          treeCoverThreshold: "≥10%",
+          scale: "30m",
+          analysisDate: new Date().toISOString(),
+          note: "Date range outside dataset coverage",
+        },
+      });
+    }
     
-    console.log(`🗓️ Analyzing forest loss from ${validStartYear + 2000} to ${validEndYear + 2000}`);
+    console.log(`🗓️ Analyzing forest loss from ${startYear + 2000} to ${endYear + 2000}`);
     
     // Create mask for forest loss in the specified period
     // Only include areas with initial tree cover > 10%
     const treeCoverMask = treeCover.gte(10);
-    const lossMask = lossYear.gte(validStartYear)
-      .and(lossYear.lte(validEndYear))
+    const lossMask = lossYear.gte(startYear)
+      .and(lossYear.lte(endYear))
       .and(treeCoverMask)
       .selfMask();
-
+    
     console.log("🗺️ Converting forest loss areas to polygons...");
     const lossPolygons = lossMask.reduceToVectors({
       geometry: region,
@@ -336,13 +353,13 @@ router.post("/analyze-illegal-logging", async (req: Request, res: Response) => {
       labelProperty: "forest_loss",
       maxPixels: 1e8,
     });
-
+    
     lossPolygons.evaluate((result: any, error: any) => {
       if (error) {
         console.error("❌ Earth Engine error:", error);
         return res.status(500).json({ error: error.message });
       }
-
+      
       console.log("✅ Illegal logging analysis completed");
       res.json({
         success: true,
@@ -350,8 +367,11 @@ router.post("/analyze-illegal-logging", async (req: Request, res: Response) => {
         dateRange: `${startDate} to ${endDate}`,
         forestLossData: result,
         metadata: {
-          dataset: "Hansen Global Forest Change (v1.10)",
-          analysisYears: `${validStartYear + 2000}-${validEndYear + 2000}`,
+          dataset: "Hansen Global Forest Change (v1.12, 2024 update)",
+          datasetVersion: "2024_v1_12",
+          analysisYears: `${startYear + 2000}-${endYear + 2000}`,
+          dataAvailableThrough: "2024",
+          datasetCoverage: "2001-2024",
           treeCoverThreshold: "≥10%",
           scale: "30m",
           analysisDate: new Date().toISOString(),

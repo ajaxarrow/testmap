@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { PhMagnifyingGlass, PhMapPin } from '@phosphor-icons/vue'
 import { useMapAreasStore } from '../../stores/mapAreas.store'
 
@@ -8,16 +8,21 @@ import barangaysData from '@/data/barangays_data.json'
 import type { AreaData } from '../../interfaces'
 
 const { clickArea } = useMapAreasStore()
+const searchedBarangays = ref<AreaData[]>(barangaysData as AreaData[])
 
 const searchQuery = ref('')
 
-// Filter barangays directly
-const filteredBarangays = computed(() => {
-  return barangaysData.filter(barangay => 
-    barangay.name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-    barangay.geojson.properties.NAME_2.toLowerCase().includes(searchQuery.value.toLowerCase())
-  )
+watch(searchQuery, (newQuery) => {
+  if (newQuery.trim() === '') {
+    searchedBarangays.value = barangaysData as AreaData[]
+  } else {
+    const lowerQuery = newQuery.toLowerCase()
+    searchedBarangays.value = (barangaysData as AreaData[]).filter(barangay =>
+      barangay.name.toLowerCase().includes(lowerQuery)
+    )
+  }
 })
+
 
 onMounted(() => {
   console.log(`Total barangays available: ${barangaysData.length}`)
@@ -46,7 +51,7 @@ onMounted(() => {
     <!-- Barangays List -->
     <div class="barangays-list">
       <div 
-        v-for="barangay in filteredBarangays"
+        v-for="barangay in searchedBarangays"
         :key="barangay.id"
         class="barangay-item"
         @click="clickArea(barangay as AreaData)"
@@ -71,7 +76,7 @@ onMounted(() => {
       </div>
       
       <div 
-        v-if="filteredBarangays.length === 0" 
+        v-if="searchedBarangays.length === 0" 
         class="text-center py-8 text-grey"
       >
         <PhMagnifyingGlass size="48" class="mb-2 opacity-50" />
