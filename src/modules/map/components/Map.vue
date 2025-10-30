@@ -7,6 +7,7 @@ import {Map} from "maplibre-gl";
 import { useMapStore } from "../stores/map.store";
 import { useMapAreasStore } from "../stores/mapAreas.store";
 import { useMapStyleStore } from "../stores/mapStyle.store";
+import { useMapCitizenReportsStore } from "../stores/mapCitizenReports.store";
 import type { AreaData } from "../interfaces";
 import barangaysData from '@/data/barangays_data.json'
 const mapContainer = shallowRef<HTMLDivElement | null>(null);
@@ -20,6 +21,7 @@ const bounds: [number, number, number, number] = [
 const { map, lnglat} = useMapStore();
 const {setupAreas, removeAreas} = useMapAreasStore();
 const { getStyleUrl, initializeMapStyle, currentStyle } = useMapStyleStore();
+const { addReportMarkers, removeReportMarkers } = useMapCitizenReportsStore();
 
 const initMap = async () => {
   if (mapContainer.value) {

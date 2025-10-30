@@ -2,6 +2,7 @@
 import Map from '../components/Map.vue';
 import MapSidebar from '../components/MapSidebar.vue';
 import MapAreaDetailsSidebar from '../components/Areas/MapAreaDetailsSidebar.vue';
+import MapReportDetailsSidebar from '../components/Reports/MapReportDetailsSidebar.vue';
 </script>
 
 <template>
@@ -12,6 +13,9 @@ import MapAreaDetailsSidebar from '../components/Areas/MapAreaDetailsSidebar.vue
         </transition>
         <transition name="fade">
             <MapAreaDetailsSidebar/>
+        </transition>
+        <transition name="fade">
+            <MapReportDetailsSidebar/>
         </transition>
         
     </div>
