@@ -7,6 +7,7 @@ import {
   PhHouse,
   PhGear,
   PhTree,
+  PhChatsCircle,
 } from "@phosphor-icons/vue";
 
 import { ref, computed, defineComponent, markRaw, watch } from 'vue';
@@ -22,6 +23,7 @@ import MapLayersMainContent from "./Layers/MapLayersMainContent.vue";
 import MapMonitoringMainContent from "./Monitoring/MapMonitoringMainContent.vue";
 import MapReportsMainContent from "./Reports/MapReportsMainContent.vue";
 import MapConfigMainContent from "./Config/MapConfigMainContent.vue";
+import ChatInterface from "./ChatInterface.vue";
 
 type CustomComponent = ReturnType<typeof defineComponent>;
 
@@ -30,6 +32,7 @@ const showAdditionalContent = ref(false);
 const header = ref<CustomComponent | null>(null);
 const mainContent = ref<CustomComponent | null>(null);
 const activeNav = ref('');
+const showChat = ref(false);
 
 const sidebarStyle = computed(() => {
   if (showAdditionalContent.value) {
@@ -209,6 +212,21 @@ const handleAddItem = () => {
       </div>
     </div>
   </VSheet>
+
+  <!-- Floating Chat Button -->
+  <VBtn
+    class="chat-fab"
+    color="primary"
+    size="large"
+    icon
+    elevation="8"
+    @click="showChat = true"
+  >
+    <PhChatsCircle size="28" weight="fill" />
+  </VBtn>
+
+  <!-- Chat Interface Overlay -->
+  <ChatInterface :show="showChat" @close="showChat = false" />
 </template>
 
 <style scoped>
@@ -317,5 +335,20 @@ const handleAddItem = () => {
 
 .icon {
   color: #191919 !important;
+}
+
+/* Floating Chat Button */
+.chat-fab {
+  position: fixed !important;
+  bottom: 24px;
+  right: 24px;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+}
+
+.chat-fab:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2) !important;
 }
 </style>
